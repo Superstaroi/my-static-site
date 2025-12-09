@@ -1,0 +1,250 @@
+body {
+	margin: 0;
+	color: #666;
+	background: #f7f7f7;
+}
+
+body,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.h1,
+.h2,
+.h3,
+.h4,
+.h5,
+.h6,
+a {
+	font-family: "Helvetica Neue", "Luxi Sans", "DejaVu Sans", Tahoma, "Hiragino Sans GB", STHeiti, "Microsoft YaHei";
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+	margin: 0;
+}
+
+ul,
+li {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+a,
+a:hover,
+a:focus {
+	text-decoration: none;
+}
+
+a,
+a:focus,
+.btn:focus,
+.btn:active:focus,
+.btn.active:focus,
+.btn.focus,
+.btn.focus:active,
+.btn.active.focus {
+	outline: none;
+}
+
+#main {
+	width: 100%;
+	max-width: 1170px;
+	margin: 0 auto;
+}
+
+#banner {
+	width: 100%;
+}
+
+#banner .banner-top {
+	width: 100%;
+	position: relative;
+}
+
+#banner .banner-top .title {
+	position: absolute;
+	width: 100%;
+	top: 10.54545455%;
+	text-align: center;
+	font-size: 28px;
+	color: #333;
+}
+
+#banner .banner-top .title .text {
+	width: 100%;
+	max-width: 380px;
+	margin: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.banner-img-box {
+	width: 100%;
+}
+
+.banner-img-box img {
+	width: 100%;
+	display: block;
+}
+
+#banner .banner-down-box {
+	position: absolute;
+	top: 55.454545%;
+	left: 11.9658%;
+}
+
+#banner .down-btn {
+	display: block;
+	width: 140px;
+	height: 40px;
+	line-height: 40px;
+	text-align: center;
+	background: #fff;
+	border-radius: 4px;
+	color: #333;
+	font-size: 16px;
+}
+
+#banner .down-btn .icon {
+	display: inline-block;
+	vertical-align: top;
+	margin-top: 10px;
+	margin-right: 10px;
+}
+
+.android-btn {
+	margin-top: 40px;
+}
+
+#banner .down-qrcode {
+	position: absolute;
+	left: 31.1965812%;
+	top: 55.454545%;
+
+}
+
+@media screen and (max-width:800px) {
+	#banner .down-qrcode {
+		display: none;
+	}
+}
+
+#banner .down-qrcode img {
+	width: 100px;
+	height: 100px;
+	background: #fff;
+}
+
+#banner .down-qrcode .lable {
+	text-align: center;
+	font-size: 14px;
+	color: #333;
+}
+
+#banner .banner-bottom {
+	height: 100px;
+	width: 100%;
+	background: #6a6c54;
+}
+
+#banner .banner-bottom .text {
+	text-align: center;
+	font-size: 18px;
+	color: #fff;
+	padding-top: 20px;
+}
+
+#banner .banner-bottom .score-box {
+	text-align: center;
+	margin-top: 20px;
+	font-size: 0;
+}
+
+#banner .banner-bottom .star {
+	display: inline-block;
+	width: 20px;
+	height: 20px;
+	margin-right: 12px;
+	background-repeat: no-repeat;
+}
+
+.real_star {
+	background-image: url(../images/star.png);
+}
+
+.empty_star {
+	background-image: url(../images/empty_star.png);
+}
+
+#content {
+	padding: 0 100px;
+	padding-bottom: 40px;
+	background: #d3e2e5;
+}
+
+#content .app_logo_box {
+	padding: 30px 0;
+}
+
+#content .app_logo {
+	width: 60px;
+	height: 60px;
+	vertical-align: middle;
+}
+
+#content .app_name {
+	display: inline-block;
+	vertical-align: middle;
+	font-size: 14px;
+	color: #333;
+	margin-left: 10px;
+}
+
+#content .app_details {
+	font-size: 14px;
+	color: #333;
+}
+
+#content .app_details .lable {
+	font-size: 14px;
+	font-weight: 400;
+	padding-bottom: 10px;
+}
+
+#footer {
+	padding: 0 30px 0 30px;
+	background: #d3e2e5;
+}
+
+#footer .line {
+	height: 1px;
+	background: #fff;
+	width: 100%;
+}
+
+#footer .desc {
+	padding: 35px 0 35px 0;
+	text-align: center;
+	font-size: 14px;
+	color: #fff;
+}
+
+#footer .desc a {
+	color: #fff;
+}
+
+/*@media (max-width: 992px){
+    #banner .banner-down-box {
+	    position: absolute;
+	    top: 50%;
+	    left: 60%;
+	}
+}*/
