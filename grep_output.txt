@@ -1,0 +1,159 @@
+54-  }, [rows]);
+55-  const [isGenerating, setIsGenerating] = useState(false);
+56:  const [error, setError] = useState<string | null>(null);
+57-  const [imageSize, setImageSize] = useState<string>('1K');
+58-  const [hasApiKey, setHasApiKey] = useState<boolean>(true);
+59-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+60-
+61-  const productInputRef = useRef<HTMLInputElement>(null);
+--
+88-    if (file) {
+89-      if (!file.type.startsWith('image/')) {
+90:        setError('请上传有效的商品图片文件。');
+91-        return;
+92-      }
+93:      setError(null);
+94-      const reader = new FileReader();
+95-      reader.onloadend = () => {
+96-        const dataUrl = reader.result as string;
+97-        const [header, data] = dataUrl.split(',');
+98-        const mimeType = header.split(':')[1].split(';')[0];
+--
+117-        setReferenceImage({ file, dataUrl, base64: { data, mimeType } });
+118-        setSingleGen(prev => ({ ...prev, status: 'idle', generatedImages: [], error: '' }));
+119:        setError(null);
+120-      };
+121-      reader.readAsDataURL(file);
+122-    } else {
+123-      setReferenceImage(null);
+124-      setExcelFile(file);
+--
+126-        const parsedRows = await parseExcel(file);
+127-        setRows(parsedRows);
+128:        setError(null);
+129-      } catch (err) {
+130:        setError('解析 Excel 文件失败，请确保是有效的 .xlsx 或 .csv 文件。');
+131-        console.error(err);
+132-      }
+133-    }
+134-  };
+135-
+--
+215-          refBase64 = await fetchImageAsBase64(currentRow.refUrl);
+216-        } catch (fetchErr) {
+217:          throw new Error(`从 URL 加载参考图失败: ${currentRow.refUrl}`);
+218-        }
+219-      }
+220-
+221-      const promptOptions = createPromptOptions(true, currentRow, undefined, !!refBase64);
+222-      const prompt = buildPrompt(promptOptions);
+--
+243-      if (err.message?.includes('Requested entity was not found')) {
+244-        setHasApiKey(false);
+245:        setError('API Key 错误，请重新选择您的 API Key。');
+246-      }
+247-      setRows(prev => {
+248-        const newRows = [...prev];
+249-        const idx = newRows.findIndex(r => r.id === rowId);
+250-        if (idx !== -1) {
+--
+258-  const handleSingleGenerate = async () => {
+259-    if (!hasApiKey) {
+260:      setError('请先选择 API Key。');
+261-      return;
+262-    }
+263-    if (!productImage) {
+264:      setError('请先上传商品图。');
+265-      return;
+266-    }
+267-
+268-    setSingleGen(prev => ({ ...prev, status: 'generating', error: '', generatedImages: [] }));
+269:    setError(null);
+270-
+271-    try {
+272-      const hasRef = !!referenceImage;
+273-      const promptOptions = createPromptOptions(false, undefined, singleGen, hasRef);
+274-      const prompt = buildPrompt(promptOptions);
+--
+278-      const total = singleGen.count;
+279-      const allUrls: string[] = [];
+280:      let hasError = false;
+281:      let lastError = '';
+282-
+283-      for (let i = 0; i < total; i += concurrencyLimit) {
+284-        const chunkLength = Math.min(concurrencyLimit, total - i);
+285-        const chunkPromises = Array.from({ length: chunkLength }).map(async (_, idx) => {
+286-          const imageIndex = i + idx + 1;
+--
+297-            return url;
+298-          } catch (err: any) {
+299:            hasError = true;
+300:            lastError = err.message || '生成失败';
+301-            throw err;
+302-          }
+303-        });
+304-
+305-        try {
+--
+316-      }
+317-
+318:      if (hasError && allUrls.length === 0) {
+319:        throw new Error(lastError);
+320:      } else if (hasError) {
+321:        setSingleGen(prev => ({ ...prev, status: 'error', error: lastError }));
+322-      } else {
+323-        setSingleGen(prev => ({ ...prev, status: 'success' }));
+324-      }
+325-    } catch (err: any) {
+326-      if (err.message?.includes('Requested entity was not found')) {
+327-        setHasApiKey(false);
+328:        setError('API Key 错误，请重新选择您的 API Key。');
+329-      }
+330-      setSingleGen(prev => ({ ...prev, status: 'error', error: err.message || '生成失败' }));
+331-    }
+332-  };
+333-
+--
+336-    
+337-    if (!hasApiKey) {
+338:      setError('请先选择 API Key。');
+339-      return;
+340-    }
+341-    if (!productImage) {
+342:      setError('请先上传商品图。');
+343-      return;
+344-    }
+345-
+346-    setSingleGen(prev => ({ ...prev, regeneratingIndex: indexToRegenerate }));
+347-
+--
+370-      if (err.message?.includes('Requested entity was not found')) {
+371-        setHasApiKey(false);
+372:        setError('API Key 错误，请重新选择您的 API Key。');
+373-      }
+374-      alert(`重新生成第 ${indexToRegenerate + 1} 张图片失败: ${err.message}`);
+375-    } finally {
+376-      setSingleGen(prev => ({ ...prev, regeneratingIndex: null }));
+377-    }
+--
+380-  const generateImages = async () => {
+381-    if (!hasApiKey) {
+382:      setError('请先选择 API Key。');
+383-      return;
+384-    }
+385-    if (!productImage) {
+386:      setError('请先上传商品图。');
+387-      return;
+388-    }
+389-    if (rowsRef.current.length === 0) {
+390:      setError('请上传包含有效数据的 Excel 文件。');
+391-      return;
+392-    }
+393-
+394-    setIsGenerating(true);
+395:    setError(null);
+396-
+397-    const rowsToProcess = rowsRef.current.filter(r => r.status !== 'success' && r.status !== 'generating');
+398-    const concurrencyLimit = 3;
+399-
+400-    for (let i = 0; i < rowsToProcess.length; i += concurrencyLimit) {

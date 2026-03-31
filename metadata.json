@@ -1,0 +1,5 @@
+{
+  "name": "Amazon Product Image Generator",
+  "description": "Generate e-commerce product detail images from an Excel sheet and a product image using Gemini.",
+  "requestFramePermissions": []
+}

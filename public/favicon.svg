@@ -1,0 +1,27 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="40" fill="#121826"/>
+  <path d="M18 84H74L108 157L86 184L18 84Z" fill="url(#favicon_blue)"/>
+  <path d="M116 84H172L98 185L69 157L116 84Z" fill="url(#favicon_cyan)"/>
+  <path d="M84 147L127 204H92C82 204 76 194 80 186L84 147Z" fill="url(#favicon_purple)"/>
+  <path d="M178 84H234L190 143L244 204H188L133 125L178 84Z" fill="url(#favicon_pink)"/>
+  <defs>
+    <linearGradient id="favicon_blue" x1="18" y1="84" x2="108" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B44FF"/>
+      <stop offset="1" stop-color="#55D8E9"/>
+    </linearGradient>
+    <linearGradient id="favicon_cyan" x1="172" y1="84" x2="68" y2="186" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#76D6F7"/>
+      <stop offset="0.55" stop-color="#3A8BFF"/>
+      <stop offset="1" stop-color="#383BFF"/>
+    </linearGradient>
+    <linearGradient id="favicon_purple" x1="80" y1="204" x2="127" y2="147" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9A47FF"/>
+      <stop offset="1" stop-color="#6A2BE7"/>
+    </linearGradient>
+    <linearGradient id="favicon_pink" x1="163" y1="84" x2="227" y2="204" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7D8E"/>
+      <stop offset="0.45" stop-color="#FF3B9B"/>
+      <stop offset="1" stop-color="#E42294"/>
+    </linearGradient>
+  </defs>
+</svg>
