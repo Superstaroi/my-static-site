@@ -1,125 +1,31 @@
-import { generateStructuredJson } from './geminiService';
-import { ProductFingerprint, VerificationResult, VerificationIssue } from '../types/product';
-import { Type } from '@google/genai';
+import { ProductFingerprint, VerificationResult } from '../types/product';
 import { ImageType } from '../types';
+import { apiPost } from './api';
+import { assertClientImagePayload, normalizeClientImageArray } from './geminiService';
 
 export interface VerificationOptions {
   targetOutputLanguage?: string;
   imageType?: ImageType;
   expectedCopyText?: string;
+  mustContain?: string[];
+  mustNotContain?: string[];
 }
 
 export const verifyGeneratedImage = async (
-  generatedImageBase64: { data: string, mimeType: string },
+  generatedImageBase64: { data: string; mimeType: string },
   originalFingerprint: ProductFingerprint,
-  mainImageBase64: { data: string, mimeType: string },
-  supplementalImagesBase64: { data: string, mimeType: string }[] = [],
-  options: VerificationOptions = {}
-): Promise<VerificationResult> => {
-  const images = [generatedImageBase64, mainImageBase64, ...supplementalImagesBase64];
-  const { targetOutputLanguage, imageType, expectedCopyText } = options;
-  const allowComparisonLayout = imageType === 'comparison';
-  const shouldCheckCopyText = !!expectedCopyText?.trim();
-  
-  const languageCheckInstruction = targetOutputLanguage 
-    ? `9. Language Match: If there is any text rendered on the product or in the scene, does it appear to be in the requested target language (${targetOutputLanguage})? If no text was requested or rendered, this passes.` 
-    : '';
-
-  const textConsistencyInstruction = shouldCheckCopyText
-    ? `10. Text Content Match: Promotional text was requested. Does the visible rendered marketing text closely match the expected copy text "${expectedCopyText!.trim()}"? Preserve brand names, numbers, core wording, and meaning. Minor line-break differences are acceptable, but missing words, spelling errors, incorrect numerals, altered meaning, or substituted claims must fail this check.`
-    : '';
-
-  const subjectCheckInstruction = allowComparisonLayout
-    ? '1. Subject Consistency: If the generated image intentionally uses comparison panels or split views, do all visible product depictions still represent the same original product without unrelated duplicates?'
-    : '1. Single Subject: Is there exactly ONE complete product unit? (No duplicates, no collages, no inset panels).';
-
-  const collageCheckInstruction = allowComparisonLayout
-    ? '7. Composition Integrity: If comparison panels or split views are used, are they intentional, clean, and limited to the same product rather than accidental collage noise?'
-    : '7. No Collage: Is the image a single, unified scene without split views or collages?';
-
-  const comparisonModeInstruction = allowComparisonLayout
-    ? 'Intentional comparison layouts are allowed in this task, but every visible product depiction must still match the same original product and must not introduce unrelated variants.'
-    : '';
-
-  const prompt = `
-    You are an expert product image verifier. Your task is to strictly evaluate the FIRST image (the generated image) against the SUBSEQUENT images (the original product reference images) AND the provided original product fingerprint.
-    
-    Original Product Fingerprint:
-    ${JSON.stringify(originalFingerprint, null, 2)}
-    
-    Evaluate the generated image and determine if it faithfully represents the original product WITHOUT ANY unwanted alterations.
-    ${comparisonModeInstruction}
-    
-    Check the following:
-    ${subjectCheckInstruction}
-    2. Color Match: Do the primary and secondary colors match the original fingerprint and reference images?
-    3. Structure Match: Is the overall shape, key parts, and proportions identical to the original reference images?
-    4. Accessory Match: Are the accessories identical in count and position?
-    5. Logo Match: Is the logo present, correctly positioned, and unaltered compared to the reference images?
-    6. Material Match: Do the materials look identical to the original?
-    ${collageCheckInstruction}
-    8. No Extra Parts: Are there any hallucinated or extra parts that were not in the original?
-    ${languageCheckInstruction}
-    ${textConsistencyInstruction}
-    
-    Provide a detailed assessment, a score from 0 to 100, and a final pass/fail verdict.
-    If the image fails any critical check (e.g., structure altered, extra subject added), it MUST fail the overall verification.
-    If promotional text was requested, include the text you can read from the image in "detectedText".
-  `;
-
-  const schema = {
-    type: Type.OBJECT,
-    properties: {
-      passed: { type: Type.BOOLEAN },
-      score: { type: Type.NUMBER },
-      subjectCount: { type: Type.NUMBER },
-      checks: {
-        type: Type.OBJECT,
-        properties: {
-          singleSubject: { type: Type.BOOLEAN },
-          colorMatch: { type: Type.BOOLEAN },
-          structureMatch: { type: Type.BOOLEAN },
-          accessoryMatch: { type: Type.BOOLEAN },
-          logoMatch: { type: Type.BOOLEAN },
-          materialMatch: { type: Type.BOOLEAN },
-          noCollage: { type: Type.BOOLEAN },
-          noExtraParts: { type: Type.BOOLEAN },
-          ...(targetOutputLanguage ? { languageMatch: { type: Type.BOOLEAN } } : {}),
-          ...(shouldCheckCopyText ? { textContentMatch: { type: Type.BOOLEAN } } : {})
-        },
-        required: [
-          'singleSubject',
-          'colorMatch',
-          'structureMatch',
-          'accessoryMatch',
-          'logoMatch',
-          'materialMatch',
-          'noCollage',
-          'noExtraParts',
-          ...(targetOutputLanguage ? ['languageMatch'] : []),
-          ...(shouldCheckCopyText ? ['textContentMatch'] : [])
-        ]
-      },
-      ...(shouldCheckCopyText ? { detectedText: { type: Type.STRING } } : {}),
-      issues: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            type: { type: Type.STRING, enum: ['color', 'structure', 'accessory', 'logo', 'material', 'subjectCount', 'composition', 'language', 'text', 'other'] },
-            description: { type: Type.STRING },
-            severity: { type: Type.STRING, enum: ['high', 'medium', 'low'] }
-          },
-          required: ['type', 'description', 'severity']
-        }
-      },
-      recommendations: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ['passed', 'score', 'subjectCount', 'checks', ...(shouldCheckCopyText ? ['detectedText'] : []), 'issues', 'recommendations']
-  };
-
-  return await generateStructuredJson(prompt, images, schema, true) as VerificationResult;
-};
+  mainImageBase64: { data: string; mimeType: string },
+  supplementalImagesBase64: { data: string; mimeType: string }[] = [],
+  options: VerificationOptions = {},
+  signal?: AbortSignal,
+): Promise<VerificationResult> =>
+  apiPost('/api/analyze/verify', {
+    generatedImageBase64: assertClientImagePayload(generatedImageBase64, '生成图'),
+    originalFingerprint,
+    mainImageBase64: assertClientImagePayload(mainImageBase64, '主产品图'),
+    supplementalImagesBase64: normalizeClientImageArray(supplementalImagesBase64, '补充产品图'),
+    options,
+  }, { signal });
 
 export const isVerificationPassed = (result: VerificationResult): boolean => {
   const {
@@ -151,7 +57,95 @@ export const isVerificationPassed = (result: VerificationResult): boolean => {
   return result.passed && result.score >= 80 && criticalChecks.every(Boolean);
 };
 
+const buildLocalizedIssueSummary = (result: VerificationResult) => {
+  const lines: string[] = [];
+  const pushUnique = (message: string) => {
+    const normalized = message.trim();
+    if (normalized && !lines.includes(normalized)) {
+      lines.push(normalized);
+    }
+  };
+
+  if (!result.checks.singleSubject) {
+    pushUnique('画面主体不完整或不止一个，请保持单画面、单主体，并完整展示同一件产品。');
+  }
+
+  if (!result.checks.noCollage) {
+    pushUnique('画面出现了拼图、分屏、多宫格或小窗插图，请改为单张完整图片。');
+  }
+
+  if (!result.checks.structureMatch) {
+    pushUnique('产品主体结构与上传图不一致，请保持原始轮廓、关键部件和连接关系。');
+  }
+
+  if (!result.checks.colorMatch || !result.checks.materialMatch) {
+    pushUnique('产品颜色或材质与上传图不一致，请保持原始配色和材质分区。');
+  }
+
+  if (!result.checks.accessoryMatch || !result.checks.noExtraParts) {
+    pushUnique('画面出现了上传图里没有的附件、支架、底座或额外部件，请去掉多余元素。');
+  }
+
+  if (!result.checks.logoMatch) {
+    pushUnique('Logo 或品牌标记与上传图不一致，请保持原始品牌信息。');
+  }
+
+  if (result.checks.languageMatch === false) {
+    pushUnique('图片中的文案语言不符合当前要求，请按指定语言输出。');
+  }
+
+  if (result.checks.textContentMatch === false) {
+    pushUnique('图片中的文案内容与当前要求不一致，请按要求重新生成。');
+  }
+
+  if (lines.length > 0) {
+    return lines;
+  }
+
+  const issueTypeMap: Record<string, string> = {
+    color: '图片颜色与上传产品不一致，请保持原始配色。',
+    material: '图片材质与上传产品不一致，请保持原始材质和表面处理。',
+    structure: '图片结构与上传产品不一致，请保持原始轮廓和关键部件。',
+    accessory: '图片出现了额外附件或错误配件，请移除多余元素。',
+    logo: '图片中的 Logo 或品牌标记与上传产品不一致，请保持原始品牌信息。',
+    subjectCount: '图片主体数量不正确，请保持单主体展示。',
+    composition: '图片构图不符合要求，请保持单画面、非拼图构图。',
+    language: '图片中的文案语言不符合要求，请按指定语言输出。',
+    text: '图片中的文案内容与要求不一致，请重新生成。',
+    other: '当前图片与上传产品不完全一致，请人工检查后重试。',
+  };
+
+  result.issues.forEach(issue => {
+    pushUnique(issueTypeMap[issue.type] || issueTypeMap.other);
+  });
+
+  return lines;
+};
+
 export const summarizeVerificationFailures = (result: VerificationResult): string => {
-  if (result.passed) return "Verification passed.";
-  return result.issues.map(i => `[${i.severity.toUpperCase()}] ${i.type}: ${i.description}`).join('\n');
+  if (result.passed) {
+    return '校验通过。';
+  }
+
+  if (!result.issues.length) {
+    return '校验未通过，请检查图片与产品是否一致。';
+  }
+
+  const severityLabelMap: Record<'low' | 'medium' | 'high', string> = {
+    low: '低',
+    medium: '中',
+    high: '高',
+  };
+
+  const localizedLines = buildLocalizedIssueSummary(result);
+  if (localizedLines.length > 0) {
+    return localizedLines
+      .slice(0, 4)
+      .map((line, index) => `【${index === 0 ? '高' : '中'}】${line}`)
+      .join('\n');
+  }
+
+  return result.issues
+    .map(issue => `【${severityLabelMap[issue.severity] || '中'}】${issue.description}`)
+    .join('\n');
 };

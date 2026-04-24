@@ -1,10 +1,325 @@
 @import "tailwindcss";
 
+:root {
+  --vx-bg: #0b1020;
+  --vx-bg-elevated: #0f1424;
+  --vx-bg-overlay: rgba(11, 16, 32, 0.82);
+  --vx-panel: rgba(17, 19, 26, 0.9);
+  --vx-panel-strong: #1b2030;
+  --vx-panel-soft: rgba(21, 25, 34, 0.76);
+  --vx-panel-muted: rgba(255, 255, 255, 0.035);
+  --vx-border: rgba(255, 255, 255, 0.08);
+  --vx-border-strong: rgba(255, 255, 255, 0.15);
+  --vx-text: rgba(255, 255, 255, 0.92);
+  --vx-text-soft: rgba(255, 255, 255, 0.68);
+  --vx-text-muted: rgba(255, 255, 255, 0.42);
+  --vx-brand: #7c5cff;
+  --vx-brand-2: #4cc3ff;
+  --vx-success: #16a34a;
+  --vx-success-bg: rgba(22, 163, 74, 0.18);
+  --vx-warning: #f59e0b;
+  --vx-warning-bg: rgba(245, 158, 11, 0.18);
+  --vx-danger: #ef4444;
+  --vx-danger-bg: rgba(239, 68, 68, 0.18);
+  --vx-shadow: 0 24px 70px rgba(0, 0, 0, 0.36);
+  --vx-shadow-soft: 0 16px 36px rgba(0, 0, 0, 0.24);
+  --vx-ring: 0 0 0 1px rgba(124, 92, 255, 0.26), 0 0 0 5px rgba(124, 92, 255, 0.12);
+}
+
 body {
   color: #1d1d1f;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f5f5f7;
+}
+
+button:not(:disabled),
+a[href],
+[role="button"],
+summary,
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+}
+
+.vx-workspace-theme {
+  position: relative;
+  min-height: 100vh;
+  color: var(--vx-text);
+  background:
+    radial-gradient(circle at top, rgba(124, 92, 255, 0.08), transparent 35%),
+    radial-gradient(circle at 82% 18%, rgba(76, 195, 255, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(7, 9, 13, 0.98), rgba(11, 16, 32, 0.98));
+  color-scheme: dark;
+}
+
+.vx-workspace-theme ::selection {
+  background: rgba(124, 92, 255, 0.3);
+  color: #fff;
+}
+
+.vx-workspace-theme ::placeholder,
+.vx-input::placeholder {
+  color: var(--vx-text-muted);
+}
+
+.vx-workspace-theme * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.vx-workspace-theme *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.vx-workspace-theme *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.vx-workspace-theme *::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.vx-workspace-theme *::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+
+.vx-panel {
+  background:
+    linear-gradient(180deg, rgba(24, 28, 40, 0.94), rgba(14, 18, 29, 0.94));
+  border: 1px solid var(--vx-border);
+  box-shadow: var(--vx-shadow);
+  backdrop-filter: blur(20px);
+}
+
+.vx-panel-soft {
+  background:
+    linear-gradient(180deg, rgba(18, 22, 32, 0.9), rgba(13, 17, 26, 0.9));
+  border: 1px solid var(--vx-border);
+  box-shadow: var(--vx-shadow-soft);
+  backdrop-filter: blur(16px);
+}
+
+.vx-panel-strong {
+  background:
+    linear-gradient(180deg, rgba(28, 33, 46, 0.96), rgba(17, 21, 32, 0.96));
+  border: 1px solid var(--vx-border-strong);
+  box-shadow: var(--vx-shadow);
+}
+
+.vx-subpanel {
+  background:
+    linear-gradient(180deg, rgba(27, 32, 48, 0.7), rgba(16, 19, 28, 0.72));
+  border: 1px solid var(--vx-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.vx-icon-surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--vx-text-soft);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.vx-input {
+  background: rgba(9, 12, 20, 0.9);
+  border: 1px solid var(--vx-border);
+  color: var(--vx-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.vx-input:hover {
+  border-color: var(--vx-border-strong);
+  background: rgba(11, 15, 24, 0.96);
+}
+
+.vx-input:focus,
+.vx-input:focus-visible {
+  outline: none;
+  border-color: rgba(124, 92, 255, 0.58);
+  box-shadow: var(--vx-ring);
+  background: rgba(11, 15, 24, 0.98);
+}
+
+.vx-field-label {
+  color: var(--vx-text-soft);
+}
+
+.vx-dropzone {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.018));
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.vx-dropzone:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025));
+}
+
+.vx-dropzone-active {
+  border-color: rgba(124, 92, 255, 0.68);
+  background:
+    linear-gradient(135deg, rgba(124, 92, 255, 0.16), rgba(76, 195, 255, 0.13));
+  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.22), 0 0 0 6px rgba(124, 92, 255, 0.08);
+}
+
+.vx-media-surface {
+  background:
+    radial-gradient(circle at top, rgba(124, 92, 255, 0.1), transparent 52%),
+    rgba(8, 11, 18, 0.9);
+  border: 1px solid var(--vx-border);
+}
+
+.vx-empty-state {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  color: var(--vx-text-muted);
+}
+
+.vx-button-primary {
+  background: linear-gradient(135deg, #6f55ff, #7c5cff 52%, #4cc3ff 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  box-shadow: 0 16px 36px rgba(92, 76, 255, 0.28);
+}
+
+.vx-button-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 20px 42px rgba(92, 76, 255, 0.34);
+}
+
+.vx-button-primary:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.vx-button-secondary {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--vx-border);
+  color: var(--vx-text);
+  box-shadow: var(--vx-shadow-soft);
+}
+
+.vx-button-secondary:hover {
+  border-color: var(--vx-border-strong);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.04));
+}
+
+.vx-button-secondary:disabled {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.vx-button-success {
+  background: linear-gradient(135deg, #0d7c3b, #16a34a);
+  border: 1px solid rgba(134, 239, 172, 0.18);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(22, 163, 74, 0.22);
+}
+
+.vx-button-success:hover {
+  filter: brightness(1.05);
+}
+
+.vx-button-success:disabled {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.vx-status-idle {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--vx-text-soft);
+}
+
+.vx-status-success {
+  background: var(--vx-success-bg);
+  color: #86efac;
+}
+
+.vx-status-warning {
+  background: var(--vx-warning-bg);
+  color: #fcd34d;
+}
+
+.vx-status-danger {
+  background: var(--vx-danger-bg);
+  color: #fca5a5;
+}
+
+.vx-chip {
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--vx-border);
+  color: var(--vx-text-soft);
+}
+
+.vx-toggle-group {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vx-border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.vx-toggle-button {
+  color: var(--vx-text-soft);
+}
+
+.vx-toggle-button:hover {
+  color: var(--vx-text);
+}
+
+.vx-toggle-button-active {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+  color: var(--vx-text);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.16);
+}
+
+.vx-select-menu {
+  background:
+    linear-gradient(180deg, rgba(21, 25, 34, 0.98), rgba(14, 18, 28, 0.98));
+  border: 1px solid var(--vx-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(18px);
+}
+
+.vx-select-option {
+  color: var(--vx-text-soft);
+}
+
+.vx-select-option:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--vx-text);
+}
+
+.vx-select-option-active {
+  background:
+    linear-gradient(135deg, rgba(124, 92, 255, 0.18), rgba(76, 195, 255, 0.1));
+  color: var(--vx-text);
+  box-shadow: inset 0 0 0 1px rgba(124, 92, 255, 0.2);
 }
 
 @keyframes float {

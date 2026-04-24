@@ -4,7 +4,7 @@ export type TextMode = 'none' | 'render_text';
 export type Language = 'auto' | 'en' | 'zh' | 'multi';
 export type CommercialTone = 'clean' | 'premium' | 'luxury' | 'tech' | 'natural';
 export type SceneStrictness = 'strict' | 'loose';
-export type DetailSetPlatform = 'amazon' | 'temu' | 'walmart' | 'shopify';
+export type DetailSetPlatform = 'amazon' | 'walmart' | 'other';
 
 export interface ExcelRow {
   id: string;
@@ -14,6 +14,7 @@ export interface ExcelRow {
   productTitle: string;
   refUrl: string;
   customPrompt?: string;
+  adjustmentPrompt?: string;
   status: 'pending' | 'generating' | 'generated' | 'success' | 'error' | 'needs_review';
   generatedImage?: string;
   error?: string;

@@ -12,7 +12,7 @@ const keyMapZhToEn = {
   '禁止变化项': 'forbiddenChanges',
   '验证清单': 'verifierChecklist',
   '置信度': 'confidence',
-  
+
   '名称': 'name',
   '十六进制代码': 'hex',
   '区域': 'area',
@@ -30,7 +30,7 @@ const keyMapZhToEn = {
   '已连接': 'attached',
   '有标志': 'hasLogo',
   '文本': 'text',
-  '颜色_logo': 'color', // '颜色' is already mapped to 'colors', but inside 'logo' it's 'color'. We can handle this in the recursive function.
+  '颜色_logo': 'color',
   '形状': 'shape'
 };
 

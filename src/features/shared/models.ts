@@ -2,6 +2,8 @@ import { CommercialTone, GenerationMode, ImageType, SceneStrictness } from '../.
 import { DetailSetPlanItem } from '../../detailSetTemplates';
 
 export interface SingleGeneratedImage {
+  id: string;
+  slot: number;
   url: string;
   prompt: string;
   adjustmentPrompt: string;

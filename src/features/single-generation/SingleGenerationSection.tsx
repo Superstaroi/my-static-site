@@ -2,6 +2,7 @@ import React from 'react';
 import {
   AlertCircle,
   Download,
+  Eye,
   Image as ImageIcon,
   Layers,
   Loader2,
@@ -10,6 +11,7 @@ import {
   Play,
   RefreshCw,
   Settings2,
+  Wand2,
   Zap,
 } from 'lucide-react';
 import {
@@ -24,6 +26,7 @@ import { SingleGenerationState } from '../shared/models';
 
 interface SingleGenerationSectionProps {
   singleGen: SingleGenerationState;
+  singleGeneratePhase: 'idle' | 'preparing' | 'generating' | 'verifying';
   productImagePresent: boolean;
   showError: boolean;
   setSingleGen: React.Dispatch<React.SetStateAction<SingleGenerationState>>;
@@ -35,10 +38,20 @@ interface SingleGenerationSectionProps {
   onEditSingleImageLocally: (index: number) => void;
   onDownloadImage: (url: string) => void;
   onOpenImage: (url: string) => void;
+  imageSize?: string;
+  setImageSize?: (value: string) => void;
+  layout?: 'full' | 'results-only' | 'settings-only';
 }
+
+const IMAGE_SIZE_OPTIONS = [
+  { label: '1K（标准）', value: '1K' },
+  { label: '2K（高清）', value: '2K' },
+  { label: '4K（超清）', value: '4K' },
+];
 
 export function SingleGenerationSection({
   singleGen,
+  singleGeneratePhase,
   productImagePresent,
   showError,
   setSingleGen,
@@ -50,258 +63,323 @@ export function SingleGenerationSection({
   onEditSingleImageLocally,
   onDownloadImage,
   onOpenImage,
+  imageSize = '1K',
+  setImageSize,
+  layout = 'full',
 }: SingleGenerationSectionProps) {
-  if (!productImagePresent) {
-    return null;
-  }
+  const showControls = layout === 'full' || layout === 'settings-only';
+  const showResults = layout === 'full' || layout === 'results-only';
+
+  const getGenerateButtonLabel = () => {
+    if (singleGeneratePhase === 'preparing') return '正在准备参数...';
+    if (singleGeneratePhase === 'generating') return `正在生成 ${singleGen.count} 张图片...`;
+    if (singleGeneratePhase === 'verifying') return '正在校验生成结果...';
+    return singleGen.count > 1 ? `生成 ${singleGen.count} 张图片` : '生成图片';
+  };
+
+  const renderResultsGrid = () => (
+    <div
+      className={`relative grid gap-5 ${
+        singleGen.generatedImages.length > 4
+          ? 'grid-cols-2 xl:grid-cols-4'
+          : singleGen.generatedImages.length > 1
+            ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3'
+            : 'grid-cols-1'
+      }`}
+    >
+      {singleGen.status === 'idle' && singleGen.generatedImages.length === 0 && (
+        <div className="vx-empty-state col-span-full flex min-h-[240px] flex-col items-center justify-center rounded-[1.75rem]">
+          <ImageIcon className="mb-4 h-10 w-10 opacity-50" />
+          <span className="text-sm font-medium">生成结果会显示在这里</span>
+        </div>
+      )}
+
+      {singleGen.generatedImages.map((imgObj, idx) => {
+        const isRegenerating = isSingleImageRegenerating(idx);
+        const disableNewRetry = !isRegenerating && hasReachedSingleImageRegenerationLimit;
+        const operationKind = singleGen.regenerationKinds[idx] || 'regenerate';
+        const operationLabel = operationKind === 'local_edit' ? '正在按补充说明修改...' : '正在重新生成...';
+
+        return (
+          <div
+            key={imgObj.id || idx}
+            className="group vx-panel-soft overflow-hidden rounded-[1.75rem] transition-all hover:-translate-y-0.5 hover:border-white/14 hover:shadow-[0_20px_46px_rgba(0,0,0,0.34)]"
+          >
+            <div className="vx-media-surface relative aspect-[4/5] overflow-hidden">
+              <img
+                src={imgObj.url}
+                alt={`生成结果 ${idx + 1}`}
+                className={`h-full w-full object-cover transition-all duration-500 ${
+                  isRegenerating ? 'scale-[1.02] opacity-50 blur-sm' : 'cursor-zoom-in group-hover:scale-105'
+                }`}
+                onClick={() => !isRegenerating && onOpenImage(imgObj.url)}
+              />
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/55 via-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+              {!isRegenerating && (
+                <div className="absolute bottom-3 right-3 flex items-center gap-2 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      onOpenImage(imgObj.url);
+                    }}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/80 shadow-md transition hover:bg-black/70 hover:text-white"
+                    title="查看大图"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      onEditSingleImageLocally(idx);
+                    }}
+                    disabled={disableNewRetry || !imgObj.adjustmentPrompt.trim()}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/80 shadow-md transition hover:bg-[rgba(124,92,255,0.26)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    title="局部编辑"
+                  >
+                    <Wand2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      onRegenerateSingleImage(idx);
+                    }}
+                    disabled={disableNewRetry}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/80 shadow-md transition hover:bg-[rgba(124,92,255,0.26)] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    title="重新生成"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      onDownloadImage(imgObj.url);
+                    }}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/80 shadow-md transition hover:bg-[rgba(22,163,74,0.22)] hover:text-white"
+                    title="下载图片"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {isRegenerating && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[rgba(7,10,17,0.7)] backdrop-blur-sm text-white">
+                  <Loader2 className="mb-3 h-9 w-9 animate-spin" />
+                  <span className="text-sm font-semibold">{operationLabel}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-bold text-[var(--vx-text)]">图片 {idx + 1}</p>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    isRegenerating ? 'vx-status-warning' : 'vx-status-idle'
+                  }`}
+                >
+                  {isRegenerating ? operationLabel.replace('正在', '').replace('...', '') : '可操作'}
+                </span>
+              </div>
+
+              <textarea
+                value={imgObj.adjustmentPrompt}
+                onChange={event => onSingleImageAdjustmentChange(idx, event.target.value)}
+                placeholder="例如：顶部留白更多、产品向右移动。"
+                disabled={isRegenerating}
+                rows={3}
+                className="vx-input w-full resize-none rounded-2xl px-4 py-3 text-sm shadow-sm transition disabled:cursor-not-allowed disabled:opacity-60"
+              />
+
+              <div className="space-y-2">
+                <p className="text-xs leading-5 text-[var(--vx-text-soft)] [word-break:break-word]">
+                  仅修改当前图，不影响整组参数。
+                </p>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onEditSingleImageLocally(idx)}
+                    disabled={isRegenerating || disableNewRetry || !imgObj.adjustmentPrompt.trim()}
+                    className="vx-button-secondary inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    局部编辑
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {singleGen.status === 'generating' && (
+        <div className="vx-panel-soft col-span-full flex min-h-[240px] flex-col items-center justify-center rounded-[1.75rem] text-[var(--vx-text)]">
+          <Loader2 className="mb-4 h-10 w-10 animate-spin text-[var(--vx-brand-2)]" />
+          <span className="text-sm font-semibold">{getGenerateButtonLabel()}</span>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5" id={showResults ? 'studio-results' : undefined}>
       {showError && (
-        <div className="bg-red-50/90 backdrop-blur-sm border border-red-200/80 text-red-700 px-5 py-4 rounded-2xl flex items-start gap-3 shadow-sm">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+        <div className="flex items-start gap-3 rounded-2xl border border-red-500/20 bg-[rgba(127,29,29,0.42)] px-5 py-4 text-red-100 shadow-sm">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
           <p className="text-sm font-medium">{singleGen.error}</p>
         </div>
       )}
 
-      <div className="bg-white/80 backdrop-blur-2xl p-8 rounded-[2rem] shadow-[0_20px_60px_rgba(0,0,0,0.03)] border border-white">
-        <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 tracking-tight text-slate-900">
-          <div className="p-2 bg-slate-100 rounded-xl text-slate-700">
-            <ImageIcon className="w-6 h-6" />
+      {showControls && (
+        <section
+          id="studio-settings"
+          className="vx-panel rounded-[2rem] p-7"
+        >
+          <div className="mb-6">
+            <h3 className="text-2xl font-black tracking-tight text-[var(--vx-text)]">设置参数</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--vx-text-soft)]">
+              调整尺寸、图片类型、风格和补充说明后，一键生成当前产品图。
+            </p>
           </div>
-          Single Generation
-        </h2>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="flex flex-col gap-6">
-            <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <SelectField
-                  label="宽高比"
-                  value={singleGen.size}
-                  onChange={val => setSingleGen(prev => ({ ...prev, size: val }))}
-                  options={ASPECT_RATIO_OPTIONS}
-                  icon={Maximize}
-                />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <SelectField
+                label="图片尺寸"
+                value={singleGen.size}
+                onChange={val => setSingleGen(prev => ({ ...prev, size: val }))}
+                options={ASPECT_RATIO_OPTIONS}
+                allowCustomInput
+                icon={Maximize}
+              />
+              <SelectField
+                label="输出分辨率"
+                value={imageSize}
+                onChange={val => setImageSize?.(String(val))}
+                options={IMAGE_SIZE_OPTIONS}
+                icon={Layers}
+              />
+            </div>
 
-                <SelectField
-                  label="数量"
-                  value={singleGen.count}
-                  onChange={val => setSingleGen(prev => ({ ...prev, count: parseInt(String(val), 10) }))}
-                  options={[
-                    { label: '1 张图片', value: 1 },
-                    { label: '2 张图片', value: 2 },
-                    { label: '3 张图片', value: 3 },
-                    { label: '4 张图片', value: 4 },
-                    { label: '5 张图片', value: 5 },
-                    { label: '6 张图片', value: 6 },
-                    { label: '7 张图片', value: 7 },
-                    { label: '8 张图片', value: 8 },
-                  ]}
-                  icon={Layers}
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <SelectField
+                label="生成数量"
+                value={singleGen.count}
+                onChange={val => setSingleGen(prev => ({ ...prev, count: parseInt(String(val), 10) }))}
+                options={[
+                  { label: '1 张', value: 1 },
+                  { label: '2 张', value: 2 },
+                  { label: '3 张', value: 3 },
+                  { label: '4 张', value: 4 },
+                  { label: '5 张', value: 5 },
+                  { label: '6 张', value: 6 },
+                  { label: '7 张', value: 7 },
+                  { label: '8 张', value: 8 },
+                ]}
+                icon={ImageIcon}
+              />
+              <SelectField
+                label="生成方式"
+                value={singleGen.mode}
+                onChange={val => setSingleGen(prev => ({ ...prev, mode: val as any }))}
+                options={MODE_OPTIONS}
+                icon={Zap}
+              />
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <SelectField
+                label="图片类型"
+                value={singleGen.imageType}
+                onChange={val => setSingleGen(prev => ({ ...prev, imageType: val as any }))}
+                options={IMAGE_TYPE_OPTIONS}
+                icon={ImageIcon}
+              />
+              <div id="studio-style-section">
                 <SelectField
-                  label="生成方式"
-                  value={singleGen.mode}
-                  onChange={val => setSingleGen(prev => ({ ...prev, mode: val as any }))}
-                  options={MODE_OPTIONS}
-                  icon={Zap}
-                />
-
-                <SelectField
-                  label="图片类型"
-                  value={singleGen.imageType}
-                  onChange={val => setSingleGen(prev => ({ ...prev, imageType: val as any }))}
-                  options={IMAGE_TYPE_OPTIONS}
-                  icon={ImageIcon}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <SelectField
-                  label="风格调性"
+                  label="风格选择"
                   value={singleGen.commercialTone}
                   onChange={val => setSingleGen(prev => ({ ...prev, commercialTone: val as any }))}
                   options={COMMERCIAL_TONE_OPTIONS}
                   icon={Palette}
                 />
-
-                <SelectField
-                  label="场景控制"
-                  value={singleGen.sceneStrictness}
-                  onChange={val => setSingleGen(prev => ({ ...prev, sceneStrictness: val as any }))}
-                  options={SCENE_STRICTNESS_OPTIONS}
-                  icon={Settings2}
-                />
               </div>
+            </div>
 
-              <div>
-                <label className="text-sm font-bold text-slate-700 mb-2 block">图片文案</label>
-                <textarea
-                  value={singleGen.copyText}
-                  onChange={e => setSingleGen(prev => ({ ...prev, copyText: e.target.value }))}
-                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-slate-300 focus:border-slate-300 outline-none transition-all resize-none placeholder:text-slate-400 shadow-sm"
-                  rows={3}
-                  placeholder="输入希望显示在图片上的文字，系统会自动保留原始语言。"
-                />
-              </div>
+            <SelectField
+              label="场景控制"
+              value={singleGen.sceneStrictness}
+              onChange={val => setSingleGen(prev => ({ ...prev, sceneStrictness: val as any }))}
+              options={SCENE_STRICTNESS_OPTIONS}
+              icon={Settings2}
+            />
 
-              <div>
-                <label className="text-sm font-bold text-slate-700 mb-2 block">补充说明（可选）</label>
-                <textarea
-                  value={singleGen.prompt}
-                  onChange={e => setSingleGen(prev => ({ ...prev, prompt: e.target.value }))}
-                  className="w-full bg-white border border-slate-200 text-slate-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-slate-300 focus:border-slate-300 outline-none transition-all resize-none placeholder:text-slate-400 shadow-sm"
-                  rows={4}
-                  placeholder="输入构图、风格或其他补充说明"
-                />
-              </div>
+            <div>
+              <label className="vx-field-label mb-2 block text-sm font-bold">图片文案（可选）</label>
+              <textarea
+                value={singleGen.copyText}
+                onChange={event => setSingleGen(prev => ({ ...prev, copyText: event.target.value }))}
+                rows={3}
+                placeholder="输入需要渲染到图片里的标题、卖点或价格文案。"
+                className="vx-input w-full rounded-2xl px-4 py-3 text-sm shadow-sm transition"
+              />
+            </div>
+
+            <div id="studio-prompt-section">
+              <label className="vx-field-label mb-2 block text-sm font-bold">补充说明（可选）</label>
+              <textarea
+                value={singleGen.prompt}
+                onChange={event => setSingleGen(prev => ({ ...prev, prompt: event.target.value }))}
+                rows={4}
+                placeholder="输入构图、氛围、光线、镜头感，或你希望额外强调的要求。"
+                className="vx-input w-full rounded-2xl px-4 py-3 text-sm shadow-sm transition"
+              />
             </div>
 
             <button
+              type="button"
               onClick={onGenerate}
-              disabled={singleGen.status === 'generating' || singleGen.regeneratingIndices.length > 0 || !productImagePresent}
-              className="w-full py-4 px-6 bg-[#1d1d1f] hover:bg-[#000000] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+              disabled={
+                singleGen.status === 'generating' ||
+                singleGeneratePhase === 'verifying' ||
+                singleGen.regeneratingIndices.length > 0 ||
+                !productImagePresent
+              }
+              className="vx-button-primary inline-flex h-12 w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-5 text-base font-bold transition disabled:cursor-not-allowed"
             >
-              {singleGen.status === 'generating' ? (
+              {singleGen.status === 'generating' || singleGeneratePhase === 'verifying' ? (
                 <>
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                  Generating...
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {getGenerateButtonLabel()}
                 </>
               ) : (
                 <>
-                  <Play className="w-6 h-6 fill-current" />
-                  {singleGen.count > 1 ? `Generate ${singleGen.count} Images` : 'Generate Image'}
+                  <Play className="h-5 w-5 fill-current" />
+                  {getGenerateButtonLabel()}
                 </>
               )}
             </button>
-            <p className="text-sm text-slate-500 leading-6">
-              单图模式下，未提取商品指纹时也可以直接生成，系统会优先按照你上传的图片和补充说明来处理；如果已经提取过指纹，系统才会额外做保真校验。
-            </p>
           </div>
+        </section>
+      )}
 
-          <div className="border border-slate-200/80 rounded-[2rem] overflow-hidden flex flex-col bg-white shadow-sm">
-            <div
-              className={`bg-slate-50/50 relative flex items-center justify-center overflow-hidden p-4 ${singleGen.generatedImages.length > 0 ? 'grid gap-4' : 'aspect-square'} ${singleGen.generatedImages.length > 4 ? 'grid-cols-3 lg:grid-cols-4' : singleGen.generatedImages.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}
-            >
-              {singleGen.status === 'idle' && singleGen.generatedImages.length === 0 && (
-                <div className="text-slate-400 flex flex-col items-center col-span-full">
-                  <ImageIcon className="w-12 h-12 mb-4 opacity-50" />
-                  <span className="text-base font-medium">待生成</span>
-                </div>
-              )}
-              {singleGen.generatedImages.map((imgObj, idx) => {
-                const isRegenerating = isSingleImageRegenerating(idx);
-                const disableNewRetry = !isRegenerating && hasReachedSingleImageRegenerationLimit;
-
-                return (
-                  <div key={idx} className="rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-white group">
-                    <div className="relative aspect-square overflow-hidden border-b border-slate-100">
-                      <img
-                        src={imgObj.url}
-                        alt={`Result ${idx + 1}`}
-                        className={`w-full h-full object-contain transition-transform duration-700 ${isRegenerating ? 'opacity-50 blur-sm' : 'group-hover:scale-105 cursor-zoom-in'}`}
-                        onClick={() => !isRegenerating && onOpenImage(imgObj.url)}
-                      />
-
-                      {isRegenerating && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/40 backdrop-blur-sm z-10">
-                          <Loader2 className="w-8 h-8 animate-spin text-slate-800 mb-2" />
-                          <span className="text-sm font-bold text-slate-800">重新生成中...</span>
-                        </div>
-                      )}
-
-                      {!isRegenerating && (
-                        <div className="absolute bottom-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all z-20">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              onRegenerateSingleImage(idx);
-                            }}
-                            disabled={disableNewRetry}
-                            className="p-2 bg-white/90 backdrop-blur rounded-lg shadow-sm text-slate-700 hover:text-indigo-600 hover:bg-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="重新生成这张图"
-                          >
-                            <RefreshCw className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              onDownloadImage(imgObj.url);
-                            }}
-                            className="p-2 bg-white/90 backdrop-blur rounded-lg shadow-sm text-slate-700 hover:text-emerald-600 hover:bg-white transition-all"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="p-3 space-y-2">
-                      <label className="block text-xs font-bold text-slate-600">单图补充说明</label>
-                      <textarea
-                        value={imgObj.adjustmentPrompt}
-                        onChange={e => onSingleImageAdjustmentChange(idx, e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                        placeholder="只针对这张图输入局部修改要求，例如：人物往后一点、顶部留白更多一些，或产品略微向右移动。"
-                        disabled={isRegenerating}
-                        className="w-full min-h-[88px] rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:border-slate-300 focus:bg-white focus:ring-2 focus:ring-slate-100 resize-y disabled:opacity-60 disabled:cursor-not-allowed"
-                      />
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs leading-5 text-slate-500">
-                          这里只会局部修改当前这张结果图，右上角刷新按钮仍然会整张重新生成。
-                        </p>
-                        <button
-                          onClick={() => onEditSingleImageLocally(idx)}
-                          disabled={isRegenerating || disableNewRetry}
-                          className="shrink-0 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                          按这条说明局部修改
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {singleGen.status === 'generating' && (
-                <div className="text-slate-800 flex flex-col items-center justify-center p-8 col-span-full">
-                  <Loader2 className="w-12 h-12 mb-4 animate-spin text-slate-400" />
-                  <span className="text-base font-bold">正在生成 {singleGen.count} 张图片...</span>
-                </div>
-              )}
+      {showResults && (
+        <section className="vx-panel rounded-[2rem] p-7">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <h3 className="text-2xl font-black tracking-tight text-[var(--vx-text)]">生成结果</h3>
+              <p className="mt-2 text-sm leading-6 text-[var(--vx-text-soft)]">每张图片都支持查看大图、局部编辑、重新生成和下载。</p>
             </div>
-
-            {singleGen.generatedImages.length > 0 && singleGen.status !== 'generating' && (
-              <div className="p-6 border-t border-slate-100 bg-white flex gap-3">
-                <button
-                  onClick={onGenerate}
-                  disabled={singleGen.regeneratingIndices.length > 0}
-                  className="flex-1 py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <RefreshCw className={`w-5 h-5 ${singleGen.regeneratingIndices.length > 0 ? 'animate-spin' : ''}`} />
-                  {singleGen.regeneratingIndices.length > 0 ? 'Regenerating...' : 'Regenerate All'}
-                </button>
-                <button
-                  onClick={() => {
-                    singleGen.generatedImages.forEach(imgObj => {
-                      onDownloadImage(imgObj.url);
-                    });
-                  }}
-                  className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-base font-bold flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer hover:shadow-md active:scale-95"
-                >
-                  <Download className="w-5 h-5" />
-                  Download All
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      </div>
+          {renderResultsGrid()}
+        </section>
+      )}
     </div>
   );
 }
