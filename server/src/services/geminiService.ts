@@ -17,7 +17,15 @@ const GEMINI_FLASH_MODEL = env.geminiFastModel;
 const GEMINI_STRUCTURED_JSON_MODEL = env.geminiStructuredModel;
 const GEMINI_IMAGE_GENERATION_MODEL = env.geminiImageModel;
 const SUPPORTED_IMAGE_SIZES = new Set(['1K', '2K', '4K']);
-const SUPPORTED_ASPECT_RATIOS = new Set(['21:9', '16:9', '9:16', '4:3', '3:4', '1:1']);
+const MODEL_ASPECT_RATIO_OPTIONS = [
+  { value: 21 / 9, label: '21:9' },
+  { value: 16 / 9, label: '16:9' },
+  { value: 9 / 16, label: '9:16' },
+  { value: 4 / 3, label: '4:3' },
+  { value: 3 / 4, label: '3:4' },
+  { value: 1, label: '1:1' },
+] as const;
+const SUPPORTED_ASPECT_RATIOS = new Set<string>(MODEL_ASPECT_RATIO_OPTIONS.map(option => option.label));
 const IMAGE_RESPONSE_MODALITIES = ['TEXT', 'IMAGE'] as const;
 
 const normalizeRequestedImageSize = (imageSize: string) => {
@@ -27,6 +35,19 @@ const normalizeRequestedImageSize = (imageSize: string) => {
   }
 
   return normalized;
+};
+
+const resolveNumericPairToAspectRatio = (width: number, height: number): string | null => {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  const targetRatio = width / height;
+  return MODEL_ASPECT_RATIO_OPTIONS.reduce((closest, option) => {
+    const closestDiff = Math.abs(Math.log(targetRatio / closest.value));
+    const optionDiff = Math.abs(Math.log(targetRatio / option.value));
+    return optionDiff < closestDiff ? option : closest;
+  }, MODEL_ASPECT_RATIO_OPTIONS[0]).label;
 };
 
 const normalizeRequestedAspectRatio = (aspectRatio: string) => {
@@ -42,41 +63,14 @@ const normalizeRequestedAspectRatio = (aspectRatio: string) => {
     .filter(Boolean)
     .join(':');
 
-  if (formatted === '1000:1334') {
-    return '3:4';
-  }
-
-  if (formatted === '1464:600') {
-    return '21:9';
-  }
-
   if (!SUPPORTED_ASPECT_RATIOS.has(formatted)) {
     const numericMatch = normalized.match(/^(\d+):(\d+)$/);
     if (numericMatch) {
       const width = Number(numericMatch[1]);
       const height = Number(numericMatch[2]);
-      if (width > 0 && height > 0) {
-        const ratio = width / height;
-        const ratioMap = [
-          { val: 21 / 9, str: '21:9' },
-          { val: 16 / 9, str: '16:9' },
-          { val: 9 / 16, str: '9:16' },
-          { val: 4 / 3, str: '4:3' },
-          { val: 3 / 4, str: '3:4' },
-          { val: 1, str: '1:1' },
-        ];
-
-        let closest = ratioMap[0];
-        let minDiff = Math.abs(ratio - closest.val);
-        for (let index = 1; index < ratioMap.length; index += 1) {
-          const diff = Math.abs(ratio - ratioMap[index].val);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closest = ratioMap[index];
-          }
-        }
-
-        return closest.str;
+      const resolved = resolveNumericPairToAspectRatio(width, height);
+      if (resolved) {
+        return resolved;
       }
     }
 
@@ -439,9 +433,9 @@ export const generateProductImageWithGemini = async (params: {
     'This is a STRICT PRODUCT-FAITHFULNESS task, not a creative redesign task.',
     'The uploaded subject product images are the ONLY true product identity for the final image.',
     'When the prompt contains explicit visible user instructions about the scene, framing, props, support container, or relative size of secondary elements, satisfy those user instructions before using any optional reference-image scene guidance.',
-    'If a reference image is provided, its product/object is a placeholder for scene, lighting, composition, or interaction only.',
+    'If a reference image is provided, its product/object is a placeholder. Use only non-product cues that are allowed by the prompt, such as scene, lighting, composition, interaction, color mood, atmosphere, or visual styling.',
     'You must replace the placeholder reference-image product with the uploaded subject product.',
-    'Never borrow physical structure, silhouette, brand cues, attachments, colors, or design language from the reference-image product.',
+    'Never borrow physical structure, silhouette, brand cues, attachments, unique product color blocking, or product-identity design details from the reference-image product.',
     'If there is any conflict between the uploaded subject product and the reference image, the uploaded subject product must win.',
     'Preserve recognizable product identity, but do not ignore an explicit requested change to a secondary support element, basket, planter, stand, base, packaging element, prop, or nearby accessory.',
   ].join(' ');

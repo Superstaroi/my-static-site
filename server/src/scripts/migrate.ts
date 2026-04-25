@@ -43,6 +43,7 @@ const migrate = async () => {
     CREATE TABLE IF NOT EXISTS \`users\` (
       \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       \`username\` VARCHAR(64) NOT NULL,
+      \`display_name\` VARCHAR(64) NOT NULL DEFAULT '',
       \`password_hash\` VARCHAR(255) NOT NULL,
       \`role\` ENUM('admin', 'user') NOT NULL DEFAULT 'user',
       \`is_active\` TINYINT(1) NOT NULL DEFAULT 1,
@@ -102,6 +103,7 @@ const migrate = async () => {
       \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       \`user_id\` BIGINT UNSIGNED NOT NULL,
       \`preview_data_url\` LONGTEXT NOT NULL,
+      \`original_data_url\` LONGTEXT NULL,
       \`source_type\` VARCHAR(32) NULL,
       \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (\`id\`)
@@ -109,6 +111,7 @@ const migrate = async () => {
   `);
 
   await ensureColumn('users', 'daily_limit', '`daily_limit` INT NOT NULL DEFAULT 50');
+  await ensureColumn('users', 'display_name', '`display_name` VARCHAR(64) NOT NULL DEFAULT \'\' AFTER `username`');
   await ensureColumn('users', 'last_login_at', '`last_login_at` DATETIME NULL');
   await ensureColumn('daily_usage', 'used_count', '`used_count` INT NOT NULL DEFAULT 0');
   await ensureColumn('quota_adjustments', 'reason', '`reason` VARCHAR(255) NULL');
@@ -118,6 +121,7 @@ const migrate = async () => {
   await ensureColumn('usage_logs', 'response_summary_json', '`response_summary_json` JSON NULL');
   await ensureColumn('usage_logs', 'updated_at', '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
   await ensureColumn('generation_history', 'preview_data_url', '`preview_data_url` LONGTEXT NOT NULL');
+  await ensureColumn('generation_history', 'original_data_url', '`original_data_url` LONGTEXT NULL AFTER `preview_data_url`');
   await ensureColumn('generation_history', 'source_type', '`source_type` VARCHAR(32) NULL');
   await ensureColumn('generation_history', 'created_at', '`created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP');
 

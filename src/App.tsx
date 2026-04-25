@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { ExcelRow, GenerationMode, ImageType, CommercialTone, SceneStrictness, DetailSetPlatform } from './types';
 import { parseExcel } from './utils/excelParser';
-import { fetchImageAsBase64, blobToBase64, generateProductImage, editGeneratedImageLocally, buildPrompt, getSizeInstruction, parseAspectRatio, BuildPromptOptions, normalizeCopyText, ImageRequestBehavior } from './services/geminiService';
+import { fetchImageAsBase64, blobToBase64, generateProductImage, editGeneratedImageLocally, buildPrompt, getSizeInstruction, parseAspectRatio, BuildPromptOptions, normalizeCopyText, ImageRequestBehavior, ImagePayload } from './services/geminiService';
 import { 
   MODE_OPTIONS, 
   IMAGE_TYPE_OPTIONS, 
@@ -144,8 +144,8 @@ const IDENTITY_ANALYSIS_TIMEOUT_MS = 45000;
 const VERIFICATION_TIMEOUT_MS = 60000;
 const BATCH_REFERENCE_PRODUCT_REPLACEMENT_HARD_CONSTRAINT = [
   'Reference-image product must be treated as a placeholder only and must not remain in the final image.',
-  'Use the reference image only for composition, camera angle, scene, environment, prop placement, hand placement, lighting, layout, and other non-product context cues.',
-  'Do not retain, copy, blend, or partially preserve any physical product structure, silhouette, attachment, color blocking, branding, or visible fragment from the reference-image product.',
+  'Use the reference image only for allowed non-product guidance such as composition, camera angle, scene, environment, prop placement, hand placement, lighting, layout, atmosphere, color mood, styling, and other context cues according to the selected generation mode.',
+  'Do not retain, copy, blend, or partially preserve any physical product structure, silhouette, attachment, branding, product-specific color blocking, or visible fragment from the reference-image product.',
   'The final visible product must be the uploaded product only, fully replacing the reference-image product.'
 ].join('\n');
 const HOME_MEDIA_FAVORITES_STORAGE_KEY = 'vx-home-media-favorites';
@@ -457,8 +457,7 @@ const getImageDimensionsFromBase64 = async (imageBase64: { data: string; mimeTyp
   };
 };
 
-const createGenerationHistoryPreviewDataUrl = async (imageUrl: string): Promise<string> => {
-  const sourceBase64 = await resolveImageUrlToBase64(imageUrl, '生成记录预览图加载失败');
+const createGenerationHistoryPreviewDataUrl = async (sourceBase64: ImagePayload): Promise<string> => {
   const sourceDataUrl = base64ToDataUrl(sourceBase64);
   const image = await loadImageFromDataUrl(sourceDataUrl);
   const largestDimension = Math.max(image.naturalWidth, image.naturalHeight);
@@ -482,6 +481,15 @@ const createGenerationHistoryPreviewDataUrl = async (imageUrl: string): Promise<
   context.drawImage(image, 0, 0, width, height);
 
   return canvas.toDataURL('image/jpeg', GENERATION_HISTORY_PREVIEW_QUALITY);
+};
+
+const createGenerationHistoryImageUrls = async (imageUrl: string) => {
+  const sourceBase64 = await resolveImageUrlToBase64(imageUrl, '生成记录图片加载失败');
+
+  return {
+    originalUrl: base64ToDataUrl(sourceBase64),
+    previewUrl: await createGenerationHistoryPreviewDataUrl(sourceBase64),
+  };
 };
 
 const toExplicitOutputSize = (dimensions: { width: number; height: number } | null | undefined) => {
@@ -1422,9 +1430,10 @@ export default function App({
     sourceType: GenerationHistorySourceType,
   ) => {
     try {
-      const previewUrl = await createGenerationHistoryPreviewDataUrl(imageUrl);
+      const { previewUrl, originalUrl } = await createGenerationHistoryImageUrls(imageUrl);
       await apiPost('/api/user/generation-history', {
         previewUrl,
+        originalUrl,
         sourceType,
       });
     } catch (historyError) {
@@ -2537,7 +2546,6 @@ export default function App({
       throw new Error('请先上传至少一张产品图。');
     }
 
-    const slotGuidance = resolveDetailSetGuidanceForSlot(detailSetSnapshot.globalPrompt, item.slot);
     const prioritizedAdjustmentPrompt = buildPrioritizedVisibleInstructionPrompt(
       item.adjustmentPrompt || '',
       { instructionLabel: 'current-image instructions' },
@@ -2566,7 +2574,7 @@ export default function App({
         customPrompt: [item.customPrompt, prioritizedAdjustmentPrompt]
           .filter(Boolean)
           .join('\n'),
-        hardConstraintPrompt: [slotGuidance, ...detailSetGuardrails]
+        hardConstraintPrompt: detailSetGuardrails
           .filter(Boolean)
           .join('\n'),
         identityLockPrompt: identityProfile
@@ -3163,7 +3171,7 @@ export default function App({
       }
 
       const localEditPrompt = getSingleImageLocalEditPrompt(
-        '',
+        currentItem.generatedPrompt || '',
         adjustmentPrompt,
         currentItem.copyText,
         detailSetSnapshot.globalPrompt
@@ -3316,10 +3324,7 @@ export default function App({
         commercialTone = currentRow.commercialTone || 'premium';
       }
 
-      const resolvedImageType: ImageType =
-        currentRow.imageType === 'banner'
-          ? 'banner'
-          : 'lifestyle';
+      const resolvedImageType: ImageType = currentRow.imageType || 'lifestyle';
       const resolvedMode: GenerationMode = currentRow.mode
         || (hasRefImage
           ? (remarks ? 'background_transfer' : 'strict_layout_match')
@@ -3328,7 +3333,7 @@ export default function App({
         ? [
             BATCH_REFERENCE_PRODUCT_REPLACEMENT_HARD_CONSTRAINT,
             remarks
-              ? 'When the row-level scene instructions conflict with the reference image, the row-level scene instructions win. Use the reference image only to support composition, atmosphere, and layout after the row-level scene instructions are satisfied.'
+              ? 'When the row-level scene instructions conflict with the reference image, the row-level scene instructions win. Use the reference image only to support composition, atmosphere, style, and layout after the row-level scene instructions are satisfied.'
               : '',
           ]
             .filter(Boolean)
@@ -3361,9 +3366,10 @@ export default function App({
         : (singleGenData.imageType === 'lifestyle' || singleGenData.imageType === 'banner'
           ? 'lifestyle_listing'
           : 'infographic_listing');
+      const resolvedSingleMode = singleGenData.mode === 'auto' ? inferredSingleMode : singleGenData.mode;
       const singleReferenceConstraints = hasRefImage
         ? [
-            'Use the reference image only for scene, lighting, composition, or atmosphere support.',
+            'Use the reference image only for allowed non-product guidance such as scene, lighting, composition, atmosphere, color mood, styling, or layout according to the selected generation mode.',
             singlePrompt
               ? 'The user supplemental instructions below must be visibly satisfied before any reference-image guidance is applied.'
               : '',
@@ -3382,7 +3388,7 @@ export default function App({
         hasRefImage: hasRefImage,
         customPrompt: emphasizedSinglePrompt,
         hardConstraintPrompt: singleReferenceConstraints,
-        mode: singleGenData.mode === 'auto' ? inferredSingleMode : singleGenData.mode,
+        mode: resolvedSingleMode,
         imageType: singleGenData.imageType,
         textMode: singleGenData.copyText.trim() ? 'render_text' : 'none',
         preserveProductText: singleGenData.preserveProductText,
@@ -4239,6 +4245,7 @@ export default function App({
         currentRow,
         identityProfile,
         adjustmentPrompt,
+        basePrompt: currentRow.generatedPrompt || '',
         externalSignal: controller.signal,
         timeoutMessage: `第 ${currentRow.rowNumber} 行局部补充修改超时了，请简化要求后重试。`
       });
@@ -4606,7 +4613,7 @@ export default function App({
 
           const aspectRatio = parseAspectRatio(singleGen.size);
           const localEditPrompt = getSingleImageLocalEditPrompt(
-            singleGen.prompt,
+            currentImage.prompt || singleGen.prompt,
             adjustmentPrompt,
             singleGen.copyText
           );

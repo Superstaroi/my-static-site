@@ -37,16 +37,18 @@ export interface BuildPromptOptions {
   sceneStrictness?: SceneStrictness;
 }
 
-const SUPPORTED_ASPECT_RATIO_MAP = new Map<string, string>([
-  ['1:1', '1:1'],
-  ['3:4', '3:4'],
-  ['4:3', '4:3'],
-  ['9:16', '9:16'],
-  ['16:9', '16:9'],
-  ['21:9', '21:9'],
-  ['1000x1334', '3:4'],
-  ['1464x600', '21:9'],
-]);
+const MODEL_ASPECT_RATIO_OPTIONS = [
+  { value: 1 / 1, label: '1:1' },
+  { value: 3 / 4, label: '3:4' },
+  { value: 4 / 3, label: '4:3' },
+  { value: 9 / 16, label: '9:16' },
+  { value: 16 / 9, label: '16:9' },
+  { value: 21 / 9, label: '21:9' },
+] as const;
+
+const SUPPORTED_ASPECT_RATIO_MAP = new Map<string, string>(
+  MODEL_ASPECT_RATIO_OPTIONS.map(option => [option.label, option.label]),
+);
 
 const normalizeAspectRatioKey = (value: string) =>
   String(value || '')
@@ -55,17 +57,17 @@ const normalizeAspectRatioKey = (value: string) =>
     .replace(/\s+/g, '')
     .replace(/\*/g, 'x');
 
-const gcd = (a: number, b: number): number => {
-  let left = Math.abs(a);
-  let right = Math.abs(b);
-
-  while (right !== 0) {
-    const remainder = left % right;
-    left = right;
-    right = remainder;
+const resolveNumericPairToAspectRatio = (width: number, height: number): string | null => {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
   }
 
-  return left || 1;
+  const targetRatio = width / height;
+  return MODEL_ASPECT_RATIO_OPTIONS.reduce((closest, option) => {
+    const closestDiff = Math.abs(Math.log(targetRatio / closest.value));
+    const optionDiff = Math.abs(Math.log(targetRatio / option.value));
+    return optionDiff < closestDiff ? option : closest;
+  }, MODEL_ASPECT_RATIO_OPTIONS[0]).label;
 };
 
 const resolveExplicitDimensionsToAspectRatio = (value: string): string | null => {
@@ -76,13 +78,18 @@ const resolveExplicitDimensionsToAspectRatio = (value: string): string | null =>
 
   const width = Number.parseInt(matched[1], 10);
   const height = Number.parseInt(matched[2], 10);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  return resolveNumericPairToAspectRatio(width, height);
+};
+
+const resolveRatioTextToAspectRatio = (value: string): string | null => {
+  const matched = value.match(/^(\d+):(\d+)$/);
+  if (!matched) {
     return null;
   }
 
-  const divisor = gcd(width, height);
-  const reducedRatio = `${width / divisor}:${height / divisor}`;
-  return SUPPORTED_ASPECT_RATIO_MAP.get(reducedRatio) || null;
+  const width = Number.parseInt(matched[1], 10);
+  const height = Number.parseInt(matched[2], 10);
+  return resolveNumericPairToAspectRatio(width, height);
 };
 
 const parseDataImageUrl = (url: string): ImagePayload => {
@@ -245,7 +252,8 @@ export const normalizeCopyText = async (
 export const parseAspectRatio = (value: string): string => {
   const normalized = normalizeAspectRatioKey(value);
   const resolved = SUPPORTED_ASPECT_RATIO_MAP.get(normalized)
-    || resolveExplicitDimensionsToAspectRatio(normalized);
+    || resolveExplicitDimensionsToAspectRatio(normalized)
+    || resolveRatioTextToAspectRatio(normalized);
 
   if (!resolved) {
     throw new Error(`暂不支持该图片比例：${value}。`);
@@ -267,7 +275,44 @@ export const getSizeInstruction = (size: string): string => {
   return `Target output ratio: ${normalized.replace('x', ':')}.`;
 };
 
+const TEXT_RENDER_INTENT_PATTERNS = [
+  /(add|render|place|put|write|show|include|display).{0,24}(text|copy|headline|title|label|badge|price|word|caption|slogan|discount|off|%)/i,
+  /(text|copy|headline|title|label|badge|price|caption|slogan).{0,24}(add|render|place|put|write|show|include|display)/i,
+  /(添加|增加|加入|加上|写上|写入|写|标注|放上|显示|呈现).{0,16}(文字|文案|文本|标题|卖点|价格|折扣|标签|标语|字幕|口号|%|off)/i,
+  /(文字|文案|文本|标题|卖点|价格|折扣|标签|标语|字幕|口号).{0,16}(添加|增加|加入|加上|写上|写入|写|标注|放上|显示|呈现)/i,
+];
+
+const TEXT_SUPPRESSION_INTENT_PATTERN =
+  /(no|without|remove|delete|hide|omit|不要|不加|无|去掉|去除|删除|隐藏).{0,16}(text|copy|headline|title|label|badge|price|word|caption|slogan|文字|文案|文本|标题|卖点|价格|折扣|标签|标语|字幕|口号)/i;
+
+const customPromptRequestsRenderedText = (prompt?: string) => {
+  const normalized = String(prompt || '').trim();
+  if (!normalized || TEXT_SUPPRESSION_INTENT_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  return TEXT_RENDER_INTENT_PATTERNS.some(pattern => pattern.test(normalized));
+};
+
+const getReferenceImageGuidanceInstruction = (mode?: GenerationMode) => {
+  if (mode === 'style_inspiration') {
+    return 'A reference image is provided. Use it for non-product visual style guidance such as color mood, lighting, atmosphere, scene styling, and overall commercial feel. Do not copy or merge its product identity.';
+  }
+
+  if (mode === 'strict_layout_match') {
+    return 'A reference image is provided. Use it for non-product composition guidance such as camera angle, framing, spatial layout, scene depth, and prop placement. Do not copy or merge its product identity.';
+  }
+
+  if (mode === 'background_transfer') {
+    return 'A reference image is provided. Use it for non-product background, environment, lighting, composition, and interaction cues. Do not copy or merge its product identity.';
+  }
+
+  return 'A reference image is provided. Use it for non-product scene, composition, lighting, atmosphere, and style guidance only, not for product identity.';
+};
+
 export const buildPrompt = (options: BuildPromptOptions): string => {
+  const shouldAllowUserRequestedText =
+    options.textMode !== 'render_text' && customPromptRequestsRenderedText(options.customPrompt);
   const lines = [
     'You are generating a production-ready e-commerce product image.',
     'Preserve the uploaded product identity exactly. Do not redesign the product itself.',
@@ -310,7 +355,7 @@ export const buildPrompt = (options: BuildPromptOptions): string => {
   }
 
   if (options.hasRefImage) {
-    lines.push('A reference image is provided. Use it for scene/composition guidance only, not for product identity.');
+    lines.push(getReferenceImageGuidanceInstruction(options.mode));
   }
 
   if (options.sizeInstruction?.trim()) {
@@ -323,6 +368,8 @@ export const buildPrompt = (options: BuildPromptOptions): string => {
     if (options.language && options.language !== 'auto') {
       lines.push(`Rendered text language: ${options.language}`);
     }
+  } else if (shouldAllowUserRequestedText) {
+    lines.push('If the additional user instructions explicitly request visible text, render only that requested text clearly. Do not invent extra promotional copy beyond the request.');
   } else {
     lines.push('Do not add any extra promotional text to the image.');
   }

@@ -37,6 +37,7 @@ type AdminSection = 'dashboard' | 'accounts' | 'users' | 'logs';
 
 type UserDraft = {
   username: string;
+  displayName: string;
   role: 'admin' | 'user';
   isActive: boolean;
   dailyLimit: number;
@@ -68,7 +69,37 @@ const usageRangeOptions = [
   { value: 90, label: '近3个月' },
 ] as const;
 
-const chartColors = ['#7c3aed', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
+const chartColors = [
+  '#7c3aed',
+  '#0f766e',
+  '#2563eb',
+  '#f97316',
+  '#dc2626',
+  '#16a34a',
+  '#0891b2',
+  '#ca8a04',
+  '#db2777',
+  '#4f46e5',
+  '#65a30d',
+  '#be123c',
+  '#0284c7',
+  '#c2410c',
+  '#0d9488',
+  '#a21caf',
+  '#1d4ed8',
+  '#15803d',
+];
+
+const getChartColor = (index: number) => {
+  if (index < chartColors.length) {
+    return chartColors[index];
+  }
+
+  const hue = Math.round((index * 137.508 + 29) % 360);
+  const saturation = 68 + (index % 3) * 6;
+  const lightness = 38 + ((index * 7) % 12);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
 
 const actionTypeLabelMap: Record<string, string> = {
   generate_image: '图片生成',
@@ -119,6 +150,37 @@ const truncate = (value?: string | null, maxLength = 80) => {
   }
 
   return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`;
+};
+
+const parseUsageLogPayload = (payload: unknown): Record<string, unknown> | null => {
+  if (!payload) {
+    return null;
+  }
+
+  if (typeof payload === 'string') {
+    try {
+      const parsed = JSON.parse(payload);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof payload === 'object' && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : null;
+};
+
+const getUsageLogImageSizeLabel = (log: UsageLogRow) => {
+  if (log.action_type !== 'generate_image' && log.action_type !== 'edit_image') {
+    return '-';
+  }
+
+  const payload = parseUsageLogPayload(log.request_payload_json);
+  const normalized = String(payload?.imageSize || '').trim().toUpperCase();
+  return /^(1K|2K|4K)$/.test(normalized) ? normalized : '-';
 };
 
 const polarToCartesian = (cx: number, cy: number, radius: number, angleInDegrees: number) => {
@@ -190,6 +252,7 @@ export const AdminPage: React.FC = () => {
   const [notices, setNotices] = useState<AdminNotice[]>([]);
   const [newUser, setNewUser] = useState({
     username: '',
+    display_name: '',
     password: '',
     daily_limit: 50,
     role: 'user' as 'admin' | 'user',
@@ -241,6 +304,7 @@ export const AdminPage: React.FC = () => {
     items.forEach(user => {
       next[user.id] = {
         username: user.username,
+        displayName: user.display_name || '',
         role: user.role,
         isActive: user.is_active,
         dailyLimit: user.daily_limit,
@@ -375,7 +439,9 @@ export const AdminPage: React.FC = () => {
     }
 
     return users.filter(user =>
-      user.username.toLowerCase().includes(keyword) || user.role.toLowerCase().includes(keyword),
+      user.username.toLowerCase().includes(keyword)
+        || String(user.display_name || '').toLowerCase().includes(keyword)
+        || user.role.toLowerCase().includes(keyword),
     );
   }, [search, users]);
 
@@ -384,6 +450,7 @@ export const AdminPage: React.FC = () => {
       users.map(user => ({
         id: user.id,
         username: user.username,
+        displayName: user.display_name || '',
         dailyLimit: user.daily_limit,
       })),
     [users],
@@ -392,7 +459,7 @@ export const AdminPage: React.FC = () => {
   const usageColorMap = useMemo(() => {
     const map = new Map<number, string>();
     users.forEach((user, index) => {
-      map.set(user.id, chartColors[index % chartColors.length]);
+      map.set(user.id, getChartColor(index));
     });
     return map;
   }, [users]);
@@ -404,7 +471,7 @@ export const AdminPage: React.FC = () => {
         userId: user.id,
         username: user.username,
         value: user.today_used,
-        color: usageColorMap.get(user.id) || chartColors[0],
+        color: usageColorMap.get(user.id) || getChartColor(0),
       }));
 
     const total = source.reduce((sum, item) => sum + item.value, 0);
@@ -437,7 +504,7 @@ export const AdminPage: React.FC = () => {
       userId: item.user_id,
       username: item.username,
       value: item.total_used,
-      color: usageColorMap.get(item.user_id) || chartColors[index % chartColors.length],
+      color: usageColorMap.get(item.user_id) || getChartColor(index),
     }));
 
     const max = Math.max(...items.map(item => item.value), 1);
@@ -476,6 +543,7 @@ export const AdminPage: React.FC = () => {
       ...prev,
       [userId]: {
         username: prev[userId]?.username ?? '',
+        displayName: prev[userId]?.displayName ?? '',
         role: prev[userId]?.role ?? 'user',
         isActive: prev[userId]?.isActive ?? true,
         dailyLimit: prev[userId]?.dailyLimit ?? 50,
@@ -490,7 +558,7 @@ export const AdminPage: React.FC = () => {
     setError('');
     try {
       await apiPost('/api/admin/users', newUser);
-      setNewUser({ username: '', password: '', daily_limit: 50, role: 'user', is_active: true });
+      setNewUser({ username: '', display_name: '', password: '', daily_limit: 50, role: 'user', is_active: true });
       await loadUsersAndSystem();
       setActiveSection('accounts');
       pushNotice('success', '新增用户成功', `账号 ${newUser.username.trim()} 已创建。`);
@@ -521,6 +589,7 @@ export const AdminPage: React.FC = () => {
     try {
       await apiPatch(`/api/admin/users/${userId}`, {
         username: draft.username.trim(),
+        display_name: draft.displayName.trim(),
         role: draft.role,
         is_active: draft.isActive,
         daily_limit: draft.dailyLimit,
@@ -940,6 +1009,12 @@ export const AdminPage: React.FC = () => {
                         className={inputClass}
                       />
                       <input
+                        value={newUser.display_name}
+                        onChange={event => setNewUser(prev => ({ ...prev, display_name: event.target.value }))}
+                        placeholder="姓名"
+                        className={inputClass}
+                      />
+                      <input
                         type="password"
                         value={newUser.password}
                         onChange={event => setNewUser(prev => ({ ...prev, password: event.target.value }))}
@@ -1004,7 +1079,8 @@ export const AdminPage: React.FC = () => {
                             key={account.id}
                             className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
                           >
-                            <p className="min-w-0 truncate text-sm font-semibold text-slate-900">{account.username}</p>
+                            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{account.username}</p>
+                            <p className="min-w-0 flex-1 truncate text-sm text-slate-500">{account.displayName || '-'}</p>
                             <span className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                               {account.dailyLimit} 次/天
                             </span>
@@ -1035,10 +1111,11 @@ export const AdminPage: React.FC = () => {
                     </div>
 
                     <div className="overflow-x-auto rounded-[1.5rem] border border-slate-200 bg-slate-50/30">
-                      <table className="min-w-[1270px] table-fixed divide-y divide-slate-200 text-sm">
+                      <table className="min-w-[1400px] table-fixed divide-y divide-slate-200 text-sm">
                         <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500">
                           <tr>
                             <th className="w-[154px] px-2.5 py-3 font-medium">用户名</th>
+                            <th className="w-[130px] px-2.5 py-3 font-medium">姓名</th>
                             <th className="w-[116px] px-2.5 py-3 font-medium">角色</th>
                             <th className="w-[112px] px-2.5 py-3 font-medium">启用</th>
                             <th className="w-[96px] px-2.5 py-3 font-medium">每日额度</th>
@@ -1053,7 +1130,7 @@ export const AdminPage: React.FC = () => {
                         <tbody className="divide-y divide-slate-100 bg-white">
                           {bootstrapping && filteredUsers.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                              <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                                 正在加载用户数据...
                               </td>
                             </tr>
@@ -1061,7 +1138,7 @@ export const AdminPage: React.FC = () => {
 
                           {!bootstrapping && filteredUsers.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
+                              <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
                                 没有匹配的用户
                               </td>
                             </tr>
@@ -1077,6 +1154,13 @@ export const AdminPage: React.FC = () => {
                                   <input
                                     value={draft?.username ?? user.username}
                                     onChange={event => patchDraft(user.id, { username: event.target.value })}
+                                    className={compactInputClass}
+                                  />
+                                </td>
+                                <td className="px-2 py-2.5 align-middle">
+                                  <input
+                                    value={draft?.displayName ?? user.display_name ?? ''}
+                                    onChange={event => patchDraft(user.id, { displayName: event.target.value })}
                                     className={compactInputClass}
                                   />
                                 </td>
@@ -1244,6 +1328,7 @@ export const AdminPage: React.FC = () => {
                           <th className="px-4 py-3 font-medium">用户</th>
                           <th className="px-4 py-3 font-medium">动作</th>
                           <th className="px-4 py-3 font-medium">状态</th>
+                          <th className="px-4 py-3 font-medium">规格</th>
                           <th className="px-4 py-3 font-medium">次数</th>
                           <th className="px-4 py-3 font-medium">错误摘要</th>
                         </tr>
@@ -1251,7 +1336,7 @@ export const AdminPage: React.FC = () => {
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {loadingLogs && logs.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                            <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                               正在加载日志...
                             </td>
                           </tr>
@@ -1259,7 +1344,7 @@ export const AdminPage: React.FC = () => {
 
                         {!loadingLogs && logs.length === 0 && (
                           <tr>
-                            <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                            <td colSpan={7} className="px-4 py-10 text-center text-slate-500">
                               暂无日志
                             </td>
                           </tr>
@@ -1279,6 +1364,7 @@ export const AdminPage: React.FC = () => {
                                 {log.success ? '成功' : '失败'}
                               </span>
                             </td>
+                            <td className="px-4 py-3 text-slate-700">{getUsageLogImageSizeLabel(log)}</td>
                             <td className="px-4 py-3 text-slate-700">{log.quota_cost}</td>
                             <td className={`px-4 py-3 ${log.success ? 'text-slate-500' : 'text-red-700'}`}>
                               {log.success ? '-' : truncate(log.error_message, 180)}

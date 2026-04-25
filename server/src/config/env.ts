@@ -78,7 +78,7 @@ export const env = {
   dbPassword: requireString('DB_PASSWORD', process.env.DB_PASSWORD),
   jwtSecret: requireString('JWT_SECRET', process.env.JWT_SECRET),
   timeZone: process.env.TZ || 'Asia/Shanghai',
-  requestBodyLimit: process.env.REQUEST_BODY_LIMIT?.trim() || '25mb',
+  requestBodyLimit: process.env.REQUEST_BODY_LIMIT?.trim() || '50mb',
   geminiApiKey: process.env.GEMINI_API_KEY?.trim() || '',
   openAiApiKey: process.env.OPENAI_API_KEY?.trim() || '',
   geminiFastModel: process.env.GEMINI_FAST_MODEL?.trim() || 'gemini-3-flash-preview',

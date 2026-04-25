@@ -27,6 +27,7 @@ export interface GenerationHistoryRecord {
   id: number;
   userId: number;
   previewUrl: string;
+  originalUrl: string;
   sourceType: string | null;
   createdAt: string;
 }

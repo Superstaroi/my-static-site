@@ -267,6 +267,7 @@ export interface SystemConfigResponse {
 export interface AdminUserRow {
   id: number;
   username: string;
+  display_name: string;
   role: 'admin' | 'user';
   is_active: boolean;
   daily_limit: number;
@@ -297,6 +298,7 @@ export type GenerationHistorySourceType = 'single' | 'batch' | 'detail' | 'unkno
 export interface GenerationHistoryItem {
   id: number;
   previewUrl: string;
+  originalUrl?: string;
   sourceType: string | null;
   createdAt: string;
 }

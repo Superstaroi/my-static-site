@@ -7,6 +7,7 @@ USE `MyTestDatabase`;
 CREATE TABLE IF NOT EXISTS `users` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(64) NOT NULL,
+  `display_name` VARCHAR(64) NOT NULL DEFAULT '',
   `password_hash` VARCHAR(255) NOT NULL,
   `role` ENUM('admin', 'user') NOT NULL DEFAULT 'user',
   `is_active` TINYINT(1) NOT NULL DEFAULT 1,
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS `generation_history` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
   `preview_data_url` LONGTEXT NOT NULL,
+  `original_data_url` LONGTEXT NULL,
   `source_type` VARCHAR(32) NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

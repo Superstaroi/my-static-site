@@ -30,6 +30,9 @@ export const postGenerationHistory = async (req: Request, res: Response) => {
   const previewUrl = typeof req.body?.previewUrl === 'string'
     ? req.body.previewUrl.trim()
     : '';
+  const originalUrl = typeof req.body?.originalUrl === 'string'
+    ? req.body.originalUrl.trim()
+    : null;
   const sourceType = typeof req.body?.sourceType === 'string'
     ? req.body.sourceType.trim()
     : null;
@@ -43,7 +46,7 @@ export const postGenerationHistory = async (req: Request, res: Response) => {
     return;
   }
 
-  await createUserGenerationHistory(req.authUser!.id, previewUrl, sourceType);
+  await createUserGenerationHistory(req.authUser!.id, previewUrl, originalUrl, sourceType);
   res.status(201).json({ success: true });
 };
 

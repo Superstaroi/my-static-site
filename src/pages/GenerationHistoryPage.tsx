@@ -35,7 +35,10 @@ const getSourceLabel = (sourceType: string | null) => {
   }
 };
 
-const getHistoryImageUrl = (item: GenerationHistoryItem) => String(item.previewUrl || '').trim();
+const getHistoryPreviewImageUrl = (item: GenerationHistoryItem) => String(item.previewUrl || '').trim();
+
+const getHistoryDownloadImageUrl = (item: GenerationHistoryItem) =>
+  String(item.originalUrl || item.previewUrl || '').trim();
 
 const getImageExtension = (url: string): string => {
   if (url.startsWith('data:image/')) {
@@ -96,7 +99,7 @@ export const GenerationHistoryPage: React.FC = () => {
   }, []);
 
   const handleOpenPreview = (item: GenerationHistoryItem) => {
-    const imageUrl = getHistoryImageUrl(item);
+    const imageUrl = getHistoryPreviewImageUrl(item);
     if (!imageUrl) {
       setError('当前记录缺少可查看的图片数据。');
       return;
@@ -106,7 +109,7 @@ export const GenerationHistoryPage: React.FC = () => {
   };
 
   const handleDownloadItem = (item: GenerationHistoryItem) => {
-    const imageUrl = getHistoryImageUrl(item);
+    const imageUrl = getHistoryDownloadImageUrl(item);
     if (!imageUrl) {
       setError('当前记录缺少可下载的图片数据。');
       return;
@@ -242,7 +245,7 @@ export const GenerationHistoryPage: React.FC = () => {
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
             {items.map(item => {
               const isDeleting = deletingItemId === item.id;
-              const imageUrl = getHistoryImageUrl(item);
+              const imageUrl = getHistoryPreviewImageUrl(item);
 
               return (
                 <article
@@ -327,7 +330,7 @@ export const GenerationHistoryPage: React.FC = () => {
             onClick={(event) => event.stopPropagation()}
           >
             <img
-              src={getHistoryImageUrl(previewingItem)}
+              src={getHistoryPreviewImageUrl(previewingItem)}
               alt={getSourceLabel(previewingItem.sourceType)}
               className="max-h-[82vh] w-full rounded-[1.4rem] bg-black object-contain"
             />

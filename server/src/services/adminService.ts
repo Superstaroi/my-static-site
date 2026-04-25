@@ -27,6 +27,39 @@ const assertPositiveInteger = (value: number, field: string) => {
   }
 };
 
+let ensureUserSchemaPromise: Promise<void> | null = null;
+
+const ensureUserColumn = async (columnName: string, addSql: string) => {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    `
+      SELECT COUNT(*) AS total
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = ?
+    `,
+    [columnName],
+  );
+
+  if (Number(rows[0]?.total ?? 0) === 0) {
+    await pool.query(`ALTER TABLE \`users\` ADD COLUMN ${addSql}`);
+  }
+};
+
+const ensureUserSchema = async () => {
+  if (!ensureUserSchemaPromise) {
+    ensureUserSchemaPromise = ensureUserColumn(
+      'display_name',
+      '`display_name` VARCHAR(64) NOT NULL DEFAULT \'\' AFTER `username`',
+    ).catch(error => {
+      ensureUserSchemaPromise = null;
+      throw error;
+    });
+  }
+
+  await ensureUserSchemaPromise;
+};
+
 const getAdminCounts = async () => {
   const [rows] = await pool.query<RowDataPacket[]>(
     `
@@ -44,12 +77,14 @@ const getAdminCounts = async () => {
 };
 
 export const listUsersWithQuota = async () => {
+  await ensureUserSchema();
   const usageDate = getTodayDateKey();
   const [rows] = await pool.query<RowDataPacket[]>(
     `
       SELECT
         u.id,
         u.username,
+        u.display_name,
         u.role,
         u.is_active,
         u.daily_limit,
@@ -75,6 +110,7 @@ export const listUsersWithQuota = async () => {
   return rows.map(row => ({
     id: Number(row.id),
     username: String(row.username),
+    display_name: String(row.display_name || ''),
     role: row.role,
     is_active: Boolean(row.is_active),
     daily_limit: Number(row.daily_limit),
@@ -89,18 +125,21 @@ export const listUsersWithQuota = async () => {
 
 export const createUser = async (payload: {
   username: string;
+  display_name?: string;
   password: string;
   daily_limit: number;
   role: 'admin' | 'user';
   is_active: boolean;
 }) => {
+  await ensureUserSchema();
   assertNonNegativeInteger(payload.daily_limit, 'daily_limit');
+  const displayName = String(payload.display_name || '').trim().slice(0, 64);
   const passwordHash = await bcrypt.hash(payload.password, 10);
 
   try {
     const [result] = await pool.query<any>(
-      'INSERT INTO users (username, password_hash, role, is_active, daily_limit) VALUES (?, ?, ?, ?, ?)',
-      [payload.username, passwordHash, payload.role, payload.is_active ? 1 : 0, payload.daily_limit],
+      'INSERT INTO users (username, display_name, password_hash, role, is_active, daily_limit) VALUES (?, ?, ?, ?, ?, ?)',
+      [payload.username, displayName, passwordHash, payload.role, payload.is_active ? 1 : 0, payload.daily_limit],
     );
     return result.insertId as number;
   } catch (error: any) {
@@ -115,14 +154,16 @@ export const updateUser = async (
   id: number,
   payload: Partial<{
     username: string;
+    display_name: string;
     is_active: boolean;
     daily_limit: number;
     role: 'admin' | 'user';
   }>,
   currentAdminId: number,
 ) => {
+  await ensureUserSchema();
   const [rows] = await pool.query<RowDataPacket[]>(
-    'SELECT id, username, role, is_active, daily_limit FROM users WHERE id = ? LIMIT 1',
+    'SELECT id, username, display_name, role, is_active, daily_limit FROM users WHERE id = ? LIMIT 1',
     [id],
   );
   const target = rows[0];
@@ -132,6 +173,10 @@ export const updateUser = async (
 
   if (payload.username !== undefined && !String(payload.username).trim()) {
     throw new HttpError(400, 'INVALID_INPUT', '用户名不能为空。');
+  }
+
+  if (payload.display_name !== undefined) {
+    payload.display_name = String(payload.display_name || '').trim().slice(0, 64);
   }
 
   if (payload.daily_limit !== undefined) {
@@ -163,6 +208,7 @@ export const updateUser = async (
 
   const fieldMap: Record<string, string> = {
     username: 'username',
+    display_name: 'display_name',
     is_active: 'is_active',
     daily_limit: 'daily_limit',
     role: 'role',

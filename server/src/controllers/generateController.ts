@@ -18,11 +18,17 @@ const respondIfActive = (res: Response, signal: AbortSignal, payload: unknown) =
   res.json(payload);
 };
 
+const getLoggedImageSize = (value: unknown) => {
+  const normalized = String(value || '1K').trim().toUpperCase();
+  return normalized || '1K';
+};
+
 export const postGenerateImage = async (req: Request, res: Response) => {
   const productBase64 = assertImagePayload(req.body?.productBase64, '产品图');
   const refBase64 = req.body?.refBase64 == null ? null : assertImagePayload(req.body.refBase64, '参考图');
   const supplementalProductBase64 = assertOptionalImageArray(req.body?.supplementalProductBase64, '补充产品图');
   const requestAbort = createRequestAbortController(req, res);
+  const loggedImageSize = getLoggedImageSize(req.body?.imageSize);
 
   try {
     const result = await executeQuotaControlledAction({
@@ -32,7 +38,7 @@ export const postGenerateImage = async (req: Request, res: Response) => {
       signal: requestAbort.signal,
       requestPayload: {
         aspectRatio: req.body?.aspectRatio,
-        imageSize: req.body?.imageSize,
+        imageSize: loggedImageSize,
         imageIndex: req.body?.imageIndex,
         totalImages: req.body?.totalImages,
         hasRefUrl: Boolean(req.body?.refUrl),
@@ -70,6 +76,7 @@ export const postEditImage = async (req: Request, res: Response) => {
   const refBase64 = req.body?.refBase64 == null ? null : assertImagePayload(req.body.refBase64, '参考图');
   const supplementalProductBase64 = assertOptionalImageArray(req.body?.supplementalProductBase64, '补充产品图');
   const requestAbort = createRequestAbortController(req, res);
+  const loggedImageSize = getLoggedImageSize(req.body?.imageSize);
 
   try {
     const result = await executeQuotaControlledAction({
@@ -79,7 +86,7 @@ export const postEditImage = async (req: Request, res: Response) => {
       signal: requestAbort.signal,
       requestPayload: {
         aspectRatio: req.body?.aspectRatio,
-        imageSize: req.body?.imageSize,
+        imageSize: loggedImageSize,
         maxSupplementalProductImages: req.body?.maxSupplementalProductImages,
         hasRefUrl: Boolean(req.body?.refUrl),
       },

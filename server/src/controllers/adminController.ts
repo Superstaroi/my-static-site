@@ -17,6 +17,7 @@ export const getUsers = async (_req: Request, res: Response) => {
 
 export const postUser = async (req: Request, res: Response) => {
   const username = String(req.body?.username || '').trim();
+  const displayName = String(req.body?.display_name || '').trim();
   const password = String(req.body?.password || '');
   const dailyLimit = Number(req.body?.daily_limit ?? 50);
   const role = req.body?.role === 'admin' ? 'admin' : 'user';
@@ -28,6 +29,7 @@ export const postUser = async (req: Request, res: Response) => {
 
   const id = await createUser({
     username,
+    display_name: displayName,
     password,
     daily_limit: dailyLimit,
     role,
@@ -56,6 +58,7 @@ export const patchUser = async (req: Request, res: Response) => {
     id,
     {
       username: req.body?.username === undefined ? undefined : String(req.body.username).trim(),
+      display_name: req.body?.display_name === undefined ? undefined : String(req.body.display_name).trim(),
       is_active: req.body?.is_active,
       daily_limit: nextDailyLimit,
       role: nextRole,
