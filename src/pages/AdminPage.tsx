@@ -55,6 +55,7 @@ type AdminNotice = {
 interface UsageSummaryItem {
   user_id: number;
   username: string;
+  display_name?: string;
   total_used: number;
 }
 
@@ -469,7 +470,7 @@ export const AdminPage: React.FC = () => {
       .filter(user => user.today_used > 0)
       .map(user => ({
         userId: user.id,
-        username: user.username,
+        username: user.display_name || user.username,
         value: user.today_used,
         color: usageColorMap.get(user.id) || getChartColor(0),
       }));
@@ -502,7 +503,7 @@ export const AdminPage: React.FC = () => {
   const rangeUsageChart = useMemo(() => {
     const items = usageSummary.map((item, index) => ({
       userId: item.user_id,
-      username: item.username,
+      username: item.display_name || item.username,
       value: item.total_used,
       color: usageColorMap.get(item.user_id) || getChartColor(index),
     }));
@@ -886,7 +887,7 @@ export const AdminPage: React.FC = () => {
                             )}
                           </div>
 
-                          <div className="space-y-4">
+                          <div className="max-h-[320px] space-y-4 overflow-y-auto pr-1">
                             {rangeUsageChart.items.map(item => (
                               <div
                                 key={item.userId}
@@ -966,7 +967,7 @@ export const AdminPage: React.FC = () => {
                           >
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                               <span className="text-slate-500">{formatDateTime(log.created_at)}</span>
-                              <span className="font-medium text-slate-900">{log.username}</span>
+                              <span className="font-medium text-slate-900">{log.display_name || log.username}</span>
                               <span className="text-slate-700">{actionTypeLabelMap[log.action_type] || log.action_type}</span>
                               <span className={log.success ? 'text-emerald-600' : 'text-red-700'}>
                                 {log.success ? '成功' : '失败'}
@@ -1325,7 +1326,7 @@ export const AdminPage: React.FC = () => {
                       <thead className="bg-slate-50 text-left text-slate-500">
                         <tr>
                           <th className="px-4 py-3 font-medium">时间</th>
-                          <th className="px-4 py-3 font-medium">用户</th>
+                          <th className="px-4 py-3 font-medium">姓名</th>
                           <th className="px-4 py-3 font-medium">动作</th>
                           <th className="px-4 py-3 font-medium">状态</th>
                           <th className="px-4 py-3 font-medium">规格</th>
@@ -1353,7 +1354,7 @@ export const AdminPage: React.FC = () => {
                         {logs.map(log => (
                           <tr key={log.id} className={log.success ? 'bg-white' : 'bg-red-50/60'}>
                             <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDateTime(log.created_at)}</td>
-                            <td className="px-4 py-3 font-medium text-slate-800">{log.username}</td>
+                            <td className="px-4 py-3 font-medium text-slate-800">{log.display_name || log.username}</td>
                             <td className="px-4 py-3 text-slate-700">{actionTypeLabelMap[log.action_type] || log.action_type}</td>
                             <td className="px-4 py-3">
                               <span

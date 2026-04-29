@@ -349,7 +349,8 @@ export const listUsageLogs = async (filters: {
     `
       SELECT
         ul.*,
-        u.username
+        u.username,
+        u.display_name
       FROM usage_logs ul
       JOIN users u ON u.id = ul.user_id
       ${whereClause}
@@ -369,6 +370,7 @@ export const listUsageLogs = async (filters: {
       id: Number(row.id),
       user_id: Number(row.user_id),
       username: String(row.username),
+      display_name: String(row.display_name || ''),
       action_type: String(row.action_type),
       success: Boolean(row.success),
       quota_cost: Number(row.quota_cost),
@@ -392,13 +394,14 @@ export const listUsageSummary = async (days: number) => {
       SELECT
         u.id AS user_id,
         u.username,
+        u.display_name,
         COALESCE(SUM(du.used_count), 0) AS total_used
       FROM users u
       LEFT JOIN daily_usage du
         ON du.user_id = u.id
         AND du.usage_date >= DATE_SUB(?, INTERVAL ? DAY)
         AND du.usage_date <= ?
-      GROUP BY u.id, u.username
+      GROUP BY u.id, u.username, u.display_name
       ORDER BY total_used DESC, u.username ASC
     `,
     [getTodayDateKey(), days - 1, getTodayDateKey()],
@@ -407,6 +410,7 @@ export const listUsageSummary = async (days: number) => {
   return rows.map(row => ({
     user_id: Number(row.user_id),
     username: String(row.username),
+    display_name: String(row.display_name || ''),
     total_used: Number(row.total_used ?? 0),
   }));
 };

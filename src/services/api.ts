@@ -283,6 +283,7 @@ export interface UsageLogRow {
   id: number;
   user_id: number;
   username: string;
+  display_name?: string;
   action_type: string;
   success: boolean;
   quota_cost: number;
