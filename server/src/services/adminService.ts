@@ -325,6 +325,8 @@ export const listUsageLogs = async (filters: {
   userId?: number;
   actionType?: string;
   success?: boolean;
+  startDate?: string;
+  endDate?: string;
 }) => {
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -340,6 +342,14 @@ export const listUsageLogs = async (filters: {
   if (filters.success !== undefined) {
     conditions.push('ul.success = ?');
     values.push(filters.success ? 1 : 0);
+  }
+  if (filters.startDate) {
+    conditions.push('ul.created_at >= ?');
+    values.push(filters.startDate);
+  }
+  if (filters.endDate) {
+    conditions.push('ul.created_at <= ?');
+    values.push(filters.endDate);
   }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

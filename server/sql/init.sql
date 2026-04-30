@@ -64,6 +64,18 @@ CREATE TABLE IF NOT EXISTS `usage_logs` (
   CONSTRAINT `fk_usage_logs_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `system_settings` (
+  `setting_key` VARCHAR(96) NOT NULL,
+  `setting_value` TEXT NOT NULL,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `system_settings` (`setting_key`, `setting_value`) VALUES
+  ('image_generation_model', 'banana2'),
+  ('model_usage_console_log_enabled', 'true')
+ON DUPLICATE KEY UPDATE `setting_value` = `setting_value`;
+
 CREATE TABLE IF NOT EXISTS `generation_history` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,

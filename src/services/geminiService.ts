@@ -296,18 +296,18 @@ const customPromptRequestsRenderedText = (prompt?: string) => {
 
 const getReferenceImageGuidanceInstruction = (mode?: GenerationMode) => {
   if (mode === 'style_inspiration') {
-    return 'A reference image is provided. Use it for non-product visual style guidance such as color mood, lighting, atmosphere, scene styling, and overall commercial feel. Do not copy or merge its product identity.';
+    return 'A reference image is provided. Use it for non-product visual style guidance such as color mood, lighting, atmosphere, scene styling, graphic layout language, typography hierarchy, callout containers, icons, arrows, glow/effect treatments, and overall commercial feel. Do not copy or merge its product identity.';
   }
 
   if (mode === 'strict_layout_match') {
-    return 'A reference image is provided. Use it for non-product composition guidance such as camera angle, framing, spatial layout, scene depth, and prop placement. Do not copy or merge its product identity.';
+    return 'A reference image is provided. Use it for non-product composition and design-language guidance such as camera angle, framing, spatial layout, scene depth, prop placement, graphic panels, callout zones, text hierarchy, icons, arrows, glow/effect treatments, and visual rhythm. Do not copy or merge its product identity.';
   }
 
   if (mode === 'background_transfer') {
-    return 'A reference image is provided. Use it for non-product background, environment, lighting, composition, and interaction cues. Do not copy or merge its product identity.';
+    return 'A reference image is provided. Use it for non-product background, environment, lighting, composition, interaction cues, graphic layout language, callout containers, icons, arrows, glow/effect treatments, and commercial visual style. Do not copy or merge its product identity.';
   }
 
-  return 'A reference image is provided. Use it for non-product scene, composition, lighting, atmosphere, and style guidance only, not for product identity.';
+  return 'A reference image is provided. Use it for non-product scene, composition, lighting, atmosphere, commercial layout style, typography hierarchy, callout containers, icons, arrows, glow/effect treatments, and visual design language only, not for product identity.';
 };
 
 export const buildPrompt = (options: BuildPromptOptions): string => {
@@ -365,6 +365,9 @@ export const buildPrompt = (options: BuildPromptOptions): string => {
   if (options.textMode === 'render_text' && options.copyText?.trim()) {
     lines.push(`Render this exact marketing copy in the image: "${options.copyText.trim()}"`);
     lines.push('The final image must visibly include the exact marketing copy above. Do not omit it, paraphrase it, or move it outside the readable composition.');
+    if (options.hasRefImage) {
+      lines.push('When rendering the requested copy, follow the reference image style at a generic design-language level: similar typography hierarchy, placement pattern, graphic containers, badges, callout shapes, icon rhythm, arrow/glow/effect style, color treatment, and spacing. Adapt the style to the uploaded product and requested copy instead of copying the reference product or any brand/logo.');
+    }
     if (options.language && options.language !== 'auto') {
       lines.push(`Rendered text language: ${options.language}`);
     }

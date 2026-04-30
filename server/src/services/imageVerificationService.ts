@@ -170,7 +170,7 @@ export const verifyGeneratedImageWithGemini = async (
     7. Composition integrity
     8. No extra parts
     ${targetOutputLanguage ? `9. Language match for requested language: ${targetOutputLanguage}` : ''}
-    ${shouldCheckCopyText ? `10. Rendered text must closely match: "${expectedCopyText!.trim()}"` : ''}
+    ${shouldCheckCopyText ? `10. Rendered text must closely match: "${expectedCopyText!.trim()}". When this is requested, checks.textContentMatch is mandatory and must be false if any number, unit, mode name, or headline is missing or misspelled.` : ''}
     ${mustContain.length > 0 ? `Must contain expectations: ${mustContain.join('; ')}` : ''}
     ${mustNotContain.length > 0 ? `Must not contain: ${mustNotContain.join('; ')}` : ''}
 
@@ -209,6 +209,8 @@ export const verifyGeneratedImageWithGemini = async (
           'materialMatch',
           'noCollage',
           'noExtraParts',
+          ...(targetOutputLanguage ? ['languageMatch'] : []),
+          ...(shouldCheckCopyText ? ['textContentMatch'] : []),
         ],
       },
       detectedText: { type: 'string' },

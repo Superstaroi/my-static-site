@@ -144,7 +144,7 @@ const IDENTITY_ANALYSIS_TIMEOUT_MS = 45000;
 const VERIFICATION_TIMEOUT_MS = 60000;
 const BATCH_REFERENCE_PRODUCT_REPLACEMENT_HARD_CONSTRAINT = [
   'Reference-image product must be treated as a placeholder only and must not remain in the final image.',
-  'Use the reference image only for allowed non-product guidance such as composition, camera angle, scene, environment, prop placement, hand placement, lighting, layout, atmosphere, color mood, styling, and other context cues according to the selected generation mode.',
+  'Use the reference image only for allowed non-product guidance such as composition, camera angle, scene, environment, prop placement, hand placement, lighting, layout, atmosphere, color mood, styling, typography hierarchy, graphic containers, badges, callout shapes, icon systems, arrows, glow/effect treatments, motion/energy/airflow effects, and other commercial visual design cues according to the selected generation mode.',
   'Do not retain, copy, blend, or partially preserve any physical product structure, silhouette, attachment, branding, product-specific color blocking, or visible fragment from the reference-image product.',
   'The final visible product must be the uploaded product only, fully replacing the reference-image product.'
 ].join('\n');
@@ -804,9 +804,68 @@ const toFingerprintTextList = (value: any): string[] => {
 };
 
 const FINGERPRINT_DISPLAY_TERM_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bcordless\s+stick\s+vacuum\s+cleaner\b/gi, '无线手持式吸尘器'],
+  [/\bstick\s+vacuum\s+cleaner\b/gi, '手持式吸尘器'],
+  [/\bvacuum\s+cleaner\b/gi, '吸尘器'],
+  [/\bhandheld\s+vacuum\b/gi, '手持吸尘器'],
+  [/\bmain\s+product\s+body\b/gi, '产品主体'],
+  [/\buploaded\s+product\b/gi, '上传产品'],
+  [/\bquick[-\s]+release\s+buttons?\b/gi, '快拆按钮'],
+  [/\bquick[-\s]+release\b/gi, '快拆'],
+  [/\bcontrol\s+buttons?\b/gi, '控制按钮'],
+  [/\bextension\s+tube\b/gi, '延长管'],
+  [/\bmetal\s+tube\b/gi, '金属管'],
+  [/\bbrush\s+head\b/gi, '地刷头'],
+  [/\bfloor\s+brush\b/gi, '地刷'],
+  [/\broller\s+brush\b/gi, '滚刷'],
+  [/\bdust\s+cup\b/gi, '尘杯'],
+  [/\bmain\s+unit\b/gi, '主机'],
+  [/\bwall\s+mount\b/gi, '壁挂支架'],
+  [/\brelease\s+button\b/gi, '释放按钮'],
+  [/\bpower\s+button\b/gi, '电源按钮'],
+  [/\blower\s+joint\b/gi, '下部连接处'],
+  [/\blower\s+section\b/gi, '下部区域'],
+  [/\blower\s+part\b/gi, '下部部件'],
+  [/\bmultiple\b/gi, '多个'],
+  [/\bvisible\b/gi, '可见'],
+  [/\bkey\s+parts?\b/gi, '关键部件'],
+  [/\bincluding\b/gi, '包括'],
+  [/\bincludes\b/gi, '包括'],
+  [/\bon\b/gi, '位于'],
+  [/\band\b/gi, '和'],
+  [/\bor\b/gi, '或'],
   [/\bprimary\b/gi, '主要'],
   [/\bsecondary\b/gi, '次要'],
   [/\baccent\b/gi, '点缀'],
+  [/\bcordless\b/gi, '无线'],
+  [/\bstick\b/gi, '杆式'],
+  [/\bvacuum\b/gi, '吸尘'],
+  [/\bcleaner\b/gi, '清洁器'],
+  [/\bhandheld\b/gi, '手持'],
+  [/\brechargeable\b/gi, '可充电'],
+  [/\bdetachable\b/gi, '可拆卸'],
+  [/\bbattery\b/gi, '电池'],
+  [/\bmotor\b/gi, '电机'],
+  [/\bhandle\b/gi, '手柄'],
+  [/\btube\b/gi, '管身'],
+  [/\bbody\b/gi, '机身'],
+  [/\bhead\b/gi, '头部'],
+  [/\bbutton\b/gi, '按钮'],
+  [/\bcontainer\b/gi, '容器'],
+  [/\bcup\b/gi, '杯体'],
+  [/\bfilter\b/gi, '滤网'],
+  [/\bnozzle\b/gi, '吸嘴'],
+  [/\bbrush\b/gi, '刷头'],
+  [/\bwheel\b/gi, '滚轮'],
+  [/\bport\b/gi, '接口'],
+  [/\bcharging\b/gi, '充电'],
+  [/\bmount\b/gi, '支架'],
+  [/\bunit\b/gi, '单元'],
+  [/\bproduct\b/gi, '产品'],
+  [/\bpart\b/gi, '部件'],
+  [/\bparts\b/gi, '部件'],
+  [/\bcomponent\b/gi, '组件'],
+  [/\bcomponents\b/gi, '组件'],
   [/\bfront\b/gi, '前侧'],
   [/\bback\b/gi, '后侧'],
   [/\bleft\b/gi, '左侧'],
@@ -880,12 +939,14 @@ const sanitizeFingerprintDisplayText = (value: unknown): string => {
   });
 
   text = text
-    .replace(/[A-Za-z]+(?:[A-Za-z0-9'".-]*[A-Za-z0-9])?/g, '')
     .replace(/\(\s*\)/g, '')
     .replace(/（\s*）/g, '')
     .replace(/\[\s*\]/g, '')
     .replace(/【\s*】/g, '')
     .replace(/\s*\/\s*/g, '、')
+    .replace(/\s*,\s*/g, '，')
+    .replace(/\s*;\s*/g, '；')
+    .replace(/\.(?=\s|$)/g, '。')
     .replace(/\s+/g, ' ')
     .replace(/\s*([，。；：、])/g, '$1')
     .replace(/([（(【\[])\s+/g, '$1')
@@ -895,7 +956,7 @@ const sanitizeFingerprintDisplayText = (value: unknown): string => {
     .replace(/^[，、；：\-\s]+|[，、；：\-\s]+$/g, '')
     .trim();
 
-  return /[\u4e00-\u9fff0-9]/u.test(text) ? text : '';
+  return text;
 };
 
 const getFingerprintDisplayValueByKind = (source: any, kind: string): string =>
@@ -3333,7 +3394,7 @@ export default function App({
         ? [
             BATCH_REFERENCE_PRODUCT_REPLACEMENT_HARD_CONSTRAINT,
             remarks
-              ? 'When the row-level scene instructions conflict with the reference image, the row-level scene instructions win. Use the reference image only to support composition, atmosphere, style, and layout after the row-level scene instructions are satisfied.'
+              ? 'When the row-level scene instructions conflict with the reference image, the row-level scene instructions win. Use the reference image only to support composition, atmosphere, style, layout, typography hierarchy, callout containers, icons, arrows, glow/effect treatments, and other non-product visual design language after the row-level scene instructions are satisfied.'
               : '',
           ]
             .filter(Boolean)
@@ -3369,7 +3430,7 @@ export default function App({
       const resolvedSingleMode = singleGenData.mode === 'auto' ? inferredSingleMode : singleGenData.mode;
       const singleReferenceConstraints = hasRefImage
         ? [
-            'Use the reference image only for allowed non-product guidance such as scene, lighting, composition, atmosphere, color mood, styling, or layout according to the selected generation mode.',
+            'Use the reference image only for allowed non-product guidance such as scene, lighting, composition, atmosphere, color mood, styling, layout, typography hierarchy, graphic containers, badges, callout shapes, icon systems, arrows, glow/effect treatments, motion/energy/airflow effects, and other commercial visual design cues according to the selected generation mode.',
             singlePrompt
               ? 'The user supplemental instructions below must be visibly satisfied before any reference-image guidance is applied.'
               : '',

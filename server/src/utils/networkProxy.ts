@@ -91,6 +91,7 @@ export const getGoogleBaseUrl = () =>
   process.env.GOOGLE_BASE_URL?.trim() || 'https://generativelanguage.googleapis.com';
 export const getConfiguredModelSummary = () => ({
   imageGenerationModel: env.geminiImageModel,
+  openAiImageGenerationModel: env.openAiImageModel,
   imageVerificationModel: env.geminiVerificationModel,
   fingerprintAnalysisModel: env.openAiAnalysisModel,
   identityAnalysisModel: env.openAiIdentityModel,

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   AlertCircle,
   BarChart3,
@@ -6,10 +7,14 @@ import {
   ChevronRight,
   Clock3,
   Database,
+  Download,
+  Info,
   Loader2,
   LogOut,
   RefreshCw,
+  Save,
   Search,
+  Settings,
   Sparkles,
   Trash2,
   UserCog,
@@ -19,12 +24,15 @@ import {
 import { useAdminAuth } from '../auth/AdminAuthContext';
 import {
   AdminUserRow,
+  AdminSettingsResponse,
   apiDelete,
   apiGet,
   apiPatch,
   apiPost,
   ApiError,
+  ModelStatus,
   SystemConfigResponse,
+  ImageGenerationModelOption,
   UsageLogRow,
 } from '../services/api';
 
@@ -33,7 +41,8 @@ interface UsageLogResponse {
   total: number;
 }
 
-type AdminSection = 'dashboard' | 'accounts' | 'users' | 'logs';
+type AdminSection = 'dashboard' | 'accounts' | 'users' | 'logs' | 'settings';
+type UsageLogPageSize = 20 | 50 | 100 | 200;
 
 type UserDraft = {
   username: string;
@@ -69,6 +78,8 @@ const usageRangeOptions = [
   { value: 30, label: '近1个月' },
   { value: 90, label: '近3个月' },
 ] as const;
+
+const usageLogPageSizeOptions: UsageLogPageSize[] = [20, 50, 100, 200];
 
 const chartColors = [
   '#7c3aed',
@@ -122,6 +133,7 @@ const sections: Array<{
   { key: 'accounts', label: '账号管理', icon: UserCog },
   { key: 'users', label: '用户管理', icon: Users },
   { key: 'logs', label: '使用日志', icon: BarChart3 },
+  { key: 'settings', label: '系统设置', icon: Settings },
 ];
 
 const formatDateTime = (value?: string | null) => {
@@ -184,6 +196,70 @@ const getUsageLogImageSizeLabel = (log: UsageLogRow) => {
   return /^(1K|2K|4K)$/.test(normalized) ? normalized : '-';
 };
 
+const getUserDisplayName = (user: Pick<AdminUserRow, 'username' | 'display_name'>) =>
+  String(user.display_name || '').trim() || user.username;
+
+const getUsageLogErrorLabel = (log: UsageLogRow) => {
+  if (log.success) {
+    return '-';
+  }
+
+  return log.error_message === 'IN_PROGRESS'
+    ? '任务中断，未返回具体错误'
+    : truncate(log.error_message, 180);
+};
+
+const buildUsageLogsWorksheetRows = (items: UsageLogRow[]) => {
+  const headers = ['时间', '姓名', '账号', '动作', '状态', '规格', '次数', '错误摘要'];
+  const rows = items.map(log => [
+    formatDateTime(log.created_at),
+    String(log.display_name || '').trim() || log.username,
+    log.username,
+    actionTypeLabelMap[log.action_type] || log.action_type,
+    log.success ? '成功' : '失败',
+    getUsageLogImageSizeLabel(log),
+    log.quota_cost,
+    getUsageLogErrorLabel(log),
+  ]);
+
+  return [headers, ...rows];
+};
+
+const getImageModelIconLabel = (model: ImageGenerationModelOption) => {
+  if (model.key === 'image2') {
+    return 'AI';
+  }
+
+  return model.key === 'bananapro' ? 'PRO' : 'B2';
+};
+
+const formatDashboardModelLabel = (
+  modelId: string | null | undefined,
+  provider: ImageGenerationModelOption['provider'] | ModelStatus['provider'],
+) => {
+  const normalized = String(modelId || '').trim();
+  if (!normalized) {
+    return '未配置';
+  }
+
+  if (provider === 'openai') {
+    return normalized
+      .replace(/^gpt/i, 'GPT')
+      .split('-')
+      .map((part, index) => index === 0 ? part : part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  return normalized
+    .split('-')
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const getProviderLabel = (provider: ImageGenerationModelOption['provider'] | ModelStatus['provider']) =>
+  provider === 'openai' ? 'OpenAI' : 'Gemini';
+
 const polarToCartesian = (cx: number, cy: number, radius: number, angleInDegrees: number) => {
   const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
 
@@ -235,15 +311,26 @@ export const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [logs, setLogs] = useState<UsageLogRow[]>([]);
   const [systemConfig, setSystemConfig] = useState<SystemConfigResponse | null>(null);
+  const [adminSettings, setAdminSettings] = useState<AdminSettingsResponse | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<{
+    imageGenerationModel: AdminSettingsResponse['imageGenerationModel'];
+    modelUsageConsoleLogEnabled: boolean;
+  }>({
+    imageGenerationModel: 'banana2',
+    modelUsageConsoleLogEnabled: true,
+  });
   const [bootstrapping, setBootstrapping] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<UsageLogPageSize>(20);
   const [totalLogs, setTotalLogs] = useState(0);
   const [actionType, setActionType] = useState('');
   const [successFilter, setSuccessFilter] = useState<'all' | 'success' | 'failure'>('all');
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [search, setSearch] = useState('');
   const [usageRangeDays, setUsageRangeDays] = useState<7 | 30 | 90>(7);
   const [usageSummary, setUsageSummary] = useState<UsageSummaryItem[]>([]);
@@ -317,14 +404,20 @@ export const AdminPage: React.FC = () => {
   };
 
   const loadUsersAndSystem = async () => {
-    const [usersResponse, systemResponse] = await Promise.all([
+    const [usersResponse, systemResponse, settingsResponse] = await Promise.all([
       apiGet<{ items: AdminUserRow[] }>('/api/admin/users'),
       apiGet<SystemConfigResponse>('/api/admin/system/config'),
+      apiGet<AdminSettingsResponse>('/api/admin/settings'),
     ]);
 
     setUsers(usersResponse.items);
     syncDrafts(usersResponse.items);
     setSystemConfig(systemResponse);
+    setAdminSettings(settingsResponse);
+    setSettingsDraft({
+      imageGenerationModel: settingsResponse.imageGenerationModel,
+      modelUsageConsoleLogEnabled: settingsResponse.modelUsageConsoleLogEnabled,
+    });
   };
 
   const loadLogs = async (targetPage = page) => {
@@ -332,12 +425,14 @@ export const AdminPage: React.FC = () => {
     try {
       const params = new URLSearchParams({
         page: String(targetPage),
-        pageSize: '20',
+        pageSize: String(pageSize),
       });
 
       if (actionType) params.set('actionType', actionType);
       if (successFilter !== 'all') params.set('success', successFilter === 'success' ? 'true' : 'false');
       if (selectedUserId) params.set('userId', selectedUserId);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
 
       const response = await apiGet<UsageLogResponse>(`/api/admin/usage-logs?${params.toString()}`);
       setLogs(response.items);
@@ -406,7 +501,7 @@ export const AdminPage: React.FC = () => {
     }
 
     void loadLogs(page);
-  }, [actionType, selectedUserId, successFilter, page]);
+  }, [actionType, selectedUserId, successFilter, startDate, endDate, pageSize, page]);
 
   useEffect(() => {
     if (bootstrapping || activeSection !== 'dashboard') {
@@ -473,7 +568,14 @@ export const AdminPage: React.FC = () => {
         username: user.display_name || user.username,
         value: user.today_used,
         color: usageColorMap.get(user.id) || getChartColor(0),
-      }));
+      }))
+      .sort((a, b) => {
+        if (b.value !== a.value) {
+          return b.value - a.value;
+        }
+
+        return a.username.localeCompare(b.username, 'zh-Hans-CN');
+      });
 
     const total = source.reduce((sum, item) => sum + item.value, 0);
     let currentAngle = 0;
@@ -521,7 +623,7 @@ export const AdminPage: React.FC = () => {
     [hoveredBarUserId, rangeUsageChart],
   );
 
-  const totalPages = Math.max(1, Math.ceil(totalLogs / 20));
+  const totalPages = Math.max(1, Math.ceil(totalLogs / pageSize));
   const actionTypes = useMemo(
     () => Array.from(new Set([...Object.keys(actionTypeLabelMap), ...logs.map(log => log.action_type)])),
     [logs],
@@ -531,13 +633,47 @@ export const AdminPage: React.FC = () => {
 
   const modelRows = useMemo(() => {
     const models = systemConfig?.models;
+    const activeImageModel = adminSettings?.availableImageModels.find(
+      model => model.key === adminSettings.imageGenerationModel,
+    );
+    const imageGenerationRow = activeImageModel
+      ? {
+          title: '图片生成模型',
+          provider: activeImageModel.providerLabel || getProviderLabel(activeImageModel.provider),
+          label: activeImageModel.configured
+            ? formatDashboardModelLabel(activeImageModel.modelId, activeImageModel.provider)
+            : '未配置',
+          id: activeImageModel.configured ? activeImageModel.modelId || '--' : '--',
+        }
+      : {
+          title: '图片生成模型',
+          provider: models?.imageGeneration?.provider ? getProviderLabel(models.imageGeneration.provider) : '--',
+          label: models?.imageGeneration?.label || '未配置',
+          id: models?.imageGeneration?.id || '--',
+        };
+
     return [
-      { title: '图片生成模型', provider: 'Gemini', label: models?.imageGeneration?.label || '未配置', id: models?.imageGeneration?.id || '--' },
-      { title: '图片校验模型', provider: 'Gemini', label: models?.imageVerification?.label || '未配置', id: models?.imageVerification?.id || '--' },
-      { title: '指纹分析模型', provider: 'OpenAI', label: models?.fingerprintAnalysis?.label || '未配置', id: models?.fingerprintAnalysis?.id || '--' },
-      { title: '身份识别模型', provider: 'OpenAI', label: models?.identityRecognition?.label || '未配置', id: models?.identityRecognition?.id || '--' },
+      imageGenerationRow,
+      {
+        title: '图片校验模型',
+        provider: models?.imageVerification?.provider ? getProviderLabel(models.imageVerification.provider) : '--',
+        label: models?.imageVerification?.label || '未配置',
+        id: models?.imageVerification?.id || '--',
+      },
+      {
+        title: '指纹分析模型',
+        provider: models?.fingerprintAnalysis?.provider ? getProviderLabel(models.fingerprintAnalysis.provider) : '--',
+        label: models?.fingerprintAnalysis?.label || '未配置',
+        id: models?.fingerprintAnalysis?.id || '--',
+      },
+      {
+        title: '身份识别模型',
+        provider: models?.identityRecognition?.provider ? getProviderLabel(models.identityRecognition.provider) : '--',
+        label: models?.identityRecognition?.label || '未配置',
+        id: models?.identityRecognition?.id || '--',
+      },
     ];
-  }, [systemConfig]);
+  }, [adminSettings, systemConfig]);
 
   const patchDraft = (userId: number, patch: Partial<UserDraft>) => {
     setUserDrafts(prev => ({
@@ -626,6 +762,65 @@ export const AdminPage: React.FC = () => {
       pushNotice('success', '删除用户成功', `账号 ${username} 已删除。`);
     } catch (err) {
       handleApiError(err, '删除账号失败，请稍后重试。', { noticeTitle: '删除用户失败' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleExportCurrentLogs = () => {
+    if (logs.length === 0) {
+      pushNotice('info', '当前页暂无可导出的日志');
+      return;
+    }
+
+    const worksheet = XLSX.utils.aoa_to_sheet(buildUsageLogsWorksheetRows(logs));
+    worksheet['!cols'] = [
+      { wch: 22 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 10 },
+      { wch: 42 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '使用日志');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    XLSX.writeFile(workbook, `vxstudio-usage-logs-page-${page}-${timestamp}.xlsx`);
+    pushNotice('success', '当前页日志已导出', `已导出 ${logs.length} 条记录。`);
+  };
+
+  const handleRefreshSettings = async () => {
+    setSaving(true);
+    try {
+      const settingsResponse = await apiGet<AdminSettingsResponse>('/api/admin/settings');
+      setAdminSettings(settingsResponse);
+      setSettingsDraft({
+        imageGenerationModel: settingsResponse.imageGenerationModel,
+        modelUsageConsoleLogEnabled: settingsResponse.modelUsageConsoleLogEnabled,
+      });
+      pushNotice('success', '配置已刷新');
+    } catch (err) {
+      handleApiError(err, '刷新系统设置失败，请稍后重试。', { noticeTitle: '刷新配置失败' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSaving(true);
+    try {
+      const settingsResponse = await apiPatch<AdminSettingsResponse>('/api/admin/settings', settingsDraft);
+      setAdminSettings(settingsResponse);
+      setSettingsDraft({
+        imageGenerationModel: settingsResponse.imageGenerationModel,
+        modelUsageConsoleLogEnabled: settingsResponse.modelUsageConsoleLogEnabled,
+      });
+      pushNotice('success', '系统设置已保存', `图片生成模型已切换为 ${settingsResponse.imageGenerationModel}。`);
+    } catch (err) {
+      handleApiError(err, '保存系统设置失败，请稍后重试。', { noticeTitle: '保存设置失败' });
     } finally {
       setSaving(false);
     }
@@ -1247,30 +1442,179 @@ export const AdminPage: React.FC = () => {
                   </section>
               )}
 
+              {activeSection === 'settings' && (
+                <div className="space-y-5">
+                  <section className="rounded-[1.8rem] border border-slate-200 bg-white px-6 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h2 className="text-2xl font-bold text-slate-950">系统设置</h2>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void handleRefreshSettings()}
+                          disabled={saving}
+                          className={secondaryButtonClass}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          刷新配置
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleSaveSettings()}
+                          disabled={saving}
+                          className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-medium text-white shadow-[0_12px_28px_rgba(124,58,237,0.25)] transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Save className="h-4 w-4" />
+                          保存设置
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1.8rem] border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                    <div>
+                      <h2 className="text-xl font-semibold text-slate-950">模型配置</h2>
+                      <p className="mt-2 text-sm text-slate-500">选择当前图片生成使用的模型</p>
+                    </div>
+
+                    <div className="mt-5 space-y-4">
+                      {(adminSettings?.availableImageModels || []).map(model => {
+                        const selected = settingsDraft.imageGenerationModel === model.key;
+                        return (
+                          <button
+                            key={model.key}
+                            type="button"
+                            disabled={!model.configured}
+                            onClick={() =>
+                              setSettingsDraft(prev => ({
+                                ...prev,
+                                imageGenerationModel: model.key,
+                              }))
+                            }
+                            className={`flex w-full cursor-pointer items-center gap-4 rounded-2xl border px-5 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                              selected
+                                ? 'border-violet-500 bg-violet-50/35 shadow-[0_14px_38px_rgba(124,58,237,0.08)]'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${
+                                selected ? 'border-violet-500 bg-violet-600' : 'border-slate-300 bg-white'
+                              }`}
+                            >
+                              <span className={`h-3 w-3 rounded-full ${selected ? 'bg-white' : 'bg-transparent'}`} />
+                            </span>
+                            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-800">
+                              {getImageModelIconLabel(model)}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-3">
+                                <span className="text-lg font-bold text-slate-950">{model.label}</span>
+                                <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-medium text-violet-600">
+                                  {model.providerLabel}
+                                </span>
+                              </span>
+                              <span className="mt-2 block text-sm text-slate-500">{model.description}</span>
+                            </span>
+                            <span className="shrink-0 text-right">
+                              {selected ? (
+                                <span className="inline-flex rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
+                                  当前使用
+                                </span>
+                              ) : model.configured ? (
+                                <span className="block h-7" aria-hidden="true" />
+                              ) : (
+                                <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+                                  未配置
+                                </span>
+                              )}
+                              <span className="mt-3 block text-sm text-slate-500">ID: {model.key}</span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1.8rem] border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <h2 className="text-xl font-semibold text-slate-950">日志与成本观察</h2>
+                        <p className="mt-2 text-sm text-slate-500">开启后将在控制台输出模型用量日志，便于观察与成本分析</p>
+                      </div>
+                      <label className="inline-flex cursor-pointer items-center gap-3 text-sm font-medium text-slate-700">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSettingsDraft(prev => ({
+                              ...prev,
+                              modelUsageConsoleLogEnabled: !prev.modelUsageConsoleLogEnabled,
+                            }))
+                          }
+                          className={`relative h-8 w-14 rounded-full transition ${
+                            settingsDraft.modelUsageConsoleLogEnabled ? 'bg-violet-600' : 'bg-slate-200'
+                          }`}
+                          aria-pressed={settingsDraft.modelUsageConsoleLogEnabled}
+                        >
+                          <span
+                            className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition ${
+                              settingsDraft.modelUsageConsoleLogEnabled ? 'left-7' : 'left-1'
+                            }`}
+                          />
+                        </button>
+                        控制台打印模型用量日志
+                        <Info className="h-4 w-4 text-slate-400" />
+                      </label>
+                    </div>
+
+                    <div className="mt-5">
+                      <p className="mb-2 text-sm font-medium text-slate-700">日志预览（示例）</p>
+                      <pre className="overflow-x-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm leading-7 text-slate-700">
+{JSON.stringify({
+  event: 'model_usage',
+  model: settingsDraft.imageGenerationModel,
+  totalTokens: 'unknown',
+}, null, 2)}
+                      </pre>
+                    </div>
+                  </section>
+                </div>
+              )}
+
               {activeSection === 'logs' && (
                 <section className="space-y-4 rounded-[1.8rem] border border-slate-200 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="text-xl font-semibold text-slate-950">使用日志</h2>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        void (async () => {
-                          const ok = await loadLogs(page);
-                          if (ok) {
-                            pushNotice('success', '日志已刷新');
-                          }
-                        })()
-                      }
-                      className={secondaryButtonClass}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      刷新日志
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleExportCurrentLogs}
+                        disabled={logs.length === 0}
+                        className={secondaryButtonClass}
+                      >
+                        <Download className="h-4 w-4" />
+                        导出当前页
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void (async () => {
+                            const ok = await loadLogs(page);
+                            if (ok) {
+                              pushNotice('success', '日志已刷新');
+                            }
+                          })()
+                        }
+                        className={secondaryButtonClass}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        刷新日志
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-4">
+                  <div className="grid gap-3 lg:grid-cols-4 2xl:grid-cols-7">
                     <select
                       value={selectedUserId}
                       onChange={event => {
@@ -1282,7 +1626,7 @@ export const AdminPage: React.FC = () => {
                       <option value="">全部用户</option>
                       {users.map(user => (
                         <option key={user.id} value={String(user.id)}>
-                          {user.username}
+                          {getUserDisplayName(user)}
                         </option>
                       ))}
                     </select>
@@ -1316,8 +1660,47 @@ export const AdminPage: React.FC = () => {
                       <option value="failure">仅失败</option>
                     </select>
 
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={event => {
+                        setStartDate(event.target.value);
+                        setPage(1);
+                      }}
+                      aria-label="开始日期"
+                      title="开始日期"
+                      className={inputClass}
+                    />
+
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={event => {
+                        setEndDate(event.target.value);
+                        setPage(1);
+                      }}
+                      aria-label="结束日期"
+                      title="结束日期"
+                      className={inputClass}
+                    />
+
+                    <select
+                      value={pageSize}
+                      onChange={event => {
+                        setPageSize(Number(event.target.value) as UsageLogPageSize);
+                        setPage(1);
+                      }}
+                      className={selectClass}
+                    >
+                      {usageLogPageSizeOptions.map(option => (
+                        <option key={option} value={option}>
+                          每页 {option} 条
+                        </option>
+                      ))}
+                    </select>
+
                     <div className="flex items-center justify-end rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-500">
-                      共 {totalLogs} 条日志
+                      当前页 {logs.length} 条 / 共 {totalLogs} 条
                     </div>
                   </div>
 
@@ -1368,7 +1751,7 @@ export const AdminPage: React.FC = () => {
                             <td className="px-4 py-3 text-slate-700">{getUsageLogImageSizeLabel(log)}</td>
                             <td className="px-4 py-3 text-slate-700">{log.quota_cost}</td>
                             <td className={`px-4 py-3 ${log.success ? 'text-slate-500' : 'text-red-700'}`}>
-                              {log.success ? '-' : truncate(log.error_message, 180)}
+                              {getUsageLogErrorLabel(log)}
                             </td>
                           </tr>
                         ))}

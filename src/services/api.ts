@@ -264,6 +264,22 @@ export interface SystemConfigResponse {
   };
 }
 
+export interface ImageGenerationModelOption {
+  key: 'image2' | 'banana2' | 'bananapro';
+  label: string;
+  provider: 'openai' | 'gemini';
+  providerLabel: string;
+  description: string;
+  modelId: string;
+  configured: boolean;
+}
+
+export interface AdminSettingsResponse {
+  imageGenerationModel: ImageGenerationModelOption['key'];
+  modelUsageConsoleLogEnabled: boolean;
+  availableImageModels: ImageGenerationModelOption[];
+}
+
 export interface AdminUserRow {
   id: number;
   username: string;

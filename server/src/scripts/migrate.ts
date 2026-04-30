@@ -99,6 +99,15 @@ const migrate = async () => {
   `);
 
   await ensureTable(`
+    CREATE TABLE IF NOT EXISTS \`system_settings\` (
+      \`setting_key\` VARCHAR(96) NOT NULL,
+      \`setting_value\` TEXT NOT NULL,
+      \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (\`setting_key\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
+
+  await ensureTable(`
     CREATE TABLE IF NOT EXISTS \`generation_history\` (
       \`id\` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       \`user_id\` BIGINT UNSIGNED NOT NULL,
@@ -120,6 +129,7 @@ const migrate = async () => {
   await ensureColumn('usage_logs', 'request_payload_json', '`request_payload_json` JSON NULL');
   await ensureColumn('usage_logs', 'response_summary_json', '`response_summary_json` JSON NULL');
   await ensureColumn('usage_logs', 'updated_at', '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await ensureColumn('system_settings', 'updated_at', '`updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
   await ensureColumn('generation_history', 'preview_data_url', '`preview_data_url` LONGTEXT NOT NULL');
   await ensureColumn('generation_history', 'original_data_url', '`original_data_url` LONGTEXT NULL AFTER `preview_data_url`');
   await ensureColumn('generation_history', 'source_type', '`source_type` VARCHAR(32) NULL');
@@ -136,6 +146,13 @@ const migrate = async () => {
   await ensureIndex('usage_logs', 'idx_usage_logs_action_type', 'KEY `idx_usage_logs_action_type` (`action_type`)');
   await ensureIndex('usage_logs', 'idx_usage_logs_success', 'KEY `idx_usage_logs_success` (`success`)');
   await ensureIndex('generation_history', 'idx_generation_history_user_created_at', 'KEY `idx_generation_history_user_created_at` (`user_id`, `created_at`, `id`)');
+
+  await pool.query(`
+    INSERT INTO \`system_settings\` (\`setting_key\`, \`setting_value\`) VALUES
+      ('image_generation_model', 'banana2'),
+      ('model_usage_console_log_enabled', 'true')
+    ON DUPLICATE KEY UPDATE \`setting_value\` = \`setting_value\`
+  `);
 
   console.info('[migrate] 数据库迁移完成。');
 };

@@ -1,9 +1,6 @@
 import type { Request, Response } from 'express';
-import {
-  editGeneratedImageLocallyWithGemini,
-  generateProductImageWithGemini,
-  normalizeCopyTextWithGemini,
-} from '../services/geminiService';
+import { normalizeCopyTextWithGemini } from '../services/geminiService';
+import { editGeneratedImageLocally, generateProductImage } from '../services/imageGenerationService';
 import { executeQuotaControlledAction } from '../services/quotaService';
 import { HttpError } from '../utils/http';
 import { assertImagePayload, assertOptionalImageArray } from '../utils/imagePayload';
@@ -48,7 +45,8 @@ export const postGenerateImage = async (req: Request, res: Response) => {
         promptLength: value.prompt.length,
       }),
       task: () =>
-        generateProductImageWithGemini({
+        generateProductImage({
+          userId: req.authUser!.id,
           productBase64,
           refBase64,
           refUrl: req.body?.refUrl,
@@ -95,7 +93,8 @@ export const postEditImage = async (req: Request, res: Response) => {
         promptLength: value.prompt.length,
       }),
       task: () =>
-        editGeneratedImageLocallyWithGemini({
+        editGeneratedImageLocally({
+          userId: req.authUser!.id,
           baseImageBase64,
           productBase64,
           refBase64,

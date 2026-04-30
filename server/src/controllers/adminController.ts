@@ -9,6 +9,7 @@ import {
   setUserQuotaTarget,
   updateUser,
 } from '../services/adminService';
+import { getAdminSettings, updateAdminSettings } from '../services/systemSettingsService';
 import { HttpError } from '../utils/http';
 
 export const getUsers = async (_req: Request, res: Response) => {
@@ -115,7 +116,7 @@ export const getUsageLogs = async (req: Request, res: Response) => {
   const pageSizeCandidate = Number(req.query.pageSize || 20);
   const page = Number.isFinite(pageCandidate) && pageCandidate > 0 ? Math.floor(pageCandidate) : 1;
   const pageSize = Number.isFinite(pageSizeCandidate) && pageSizeCandidate > 0
-    ? Math.min(100, Math.floor(pageSizeCandidate))
+    ? Math.min(200, Math.floor(pageSizeCandidate))
     : 20;
   const userIdCandidate = req.query.userId ? Number(req.query.userId) : undefined;
   const userId = userIdCandidate !== undefined && Number.isFinite(userIdCandidate) && userIdCandidate > 0
@@ -123,8 +124,14 @@ export const getUsageLogs = async (req: Request, res: Response) => {
     : undefined;
   const actionType = req.query.actionType ? String(req.query.actionType) : undefined;
   const success = req.query.success === undefined ? undefined : String(req.query.success) === 'true';
+  const normalizeDateFilter = (value: unknown, suffix: string) => {
+    const raw = typeof value === 'string' ? value.trim() : '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw} ${suffix}` : undefined;
+  };
+  const startDate = normalizeDateFilter(req.query.startDate, '00:00:00');
+  const endDate = normalizeDateFilter(req.query.endDate, '23:59:59');
 
-  res.json(await listUsageLogs({ page, pageSize, userId, actionType, success }));
+  res.json(await listUsageLogs({ page, pageSize, userId, actionType, success, startDate, endDate }));
 };
 
 export const getUsageSummary = async (req: Request, res: Response) => {
@@ -135,4 +142,15 @@ export const getUsageSummary = async (req: Request, res: Response) => {
     days,
     items: await listUsageSummary(days),
   });
+};
+
+export const getSettings = async (_req: Request, res: Response) => {
+  res.json(await getAdminSettings());
+};
+
+export const patchSettings = async (req: Request, res: Response) => {
+  res.json(await updateAdminSettings({
+    imageGenerationModel: String(req.body?.imageGenerationModel || ''),
+    modelUsageConsoleLogEnabled: Boolean(req.body?.modelUsageConsoleLogEnabled),
+  }));
 };

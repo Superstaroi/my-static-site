@@ -401,6 +401,7 @@ export const generateProductImageWithGemini = async (params: {
   totalImages?: number;
   textMode?: TextMode;
   requestBehavior?: ImageRequestBehavior;
+  modelId?: string;
   signal?: AbortSignal;
 }) => {
   const {
@@ -413,6 +414,7 @@ export const generateProductImageWithGemini = async (params: {
     imageIndex,
     totalImages,
     requestBehavior,
+    modelId,
     signal,
   } = params;
   const safeProductBase64 = assertImagePayload(productBase64, '产品图');
@@ -433,7 +435,7 @@ export const generateProductImageWithGemini = async (params: {
     'This is a STRICT PRODUCT-FAITHFULNESS task, not a creative redesign task.',
     'The uploaded subject product images are the ONLY true product identity for the final image.',
     'When the prompt contains explicit visible user instructions about the scene, framing, props, support container, or relative size of secondary elements, satisfy those user instructions before using any optional reference-image scene guidance.',
-    'If a reference image is provided, its product/object is a placeholder. Use only non-product cues that are allowed by the prompt, such as scene, lighting, composition, interaction, color mood, atmosphere, or visual styling.',
+    'If a reference image is provided, its product/object is a placeholder. Use only non-product cues that are allowed by the prompt, such as scene, lighting, composition, interaction, color mood, atmosphere, visual styling, typography hierarchy, effects, translucent panels, graphic containers, badges, icon systems, callout shapes, glow treatments, arrows, motion/energy/airflow effects, and commercial layout language.',
     'You must replace the placeholder reference-image product with the uploaded subject product.',
     'Never borrow physical structure, silhouette, brand cues, attachments, unique product color blocking, or product-identity design details from the reference-image product.',
     'If there is any conflict between the uploaded subject product and the reference image, the uploaded subject product must win.',
@@ -446,7 +448,7 @@ export const generateProductImageWithGemini = async (params: {
   }
 
   if (effectiveRefBase64) {
-    parts.push({ text: '\n--- REFERENCE IMAGE (SCENE / LIGHTING / COMPOSITION ONLY - NOT PRODUCT IDENTITY) ---\n' });
+    parts.push({ text: '\n--- REFERENCE IMAGE (NON-PRODUCT STYLE / LAYOUT / EFFECTS ONLY - NOT PRODUCT IDENTITY) ---\n' });
     parts.push({ inlineData: { mimeType: effectiveRefBase64.mimeType, data: effectiveRefBase64.data } });
   }
 
@@ -474,7 +476,7 @@ export const generateProductImageWithGemini = async (params: {
       async requestSignal => {
         try {
           return await ai.models.generateContent({
-            model: GEMINI_IMAGE_GENERATION_MODEL,
+            model: modelId?.trim() || GEMINI_IMAGE_GENERATION_MODEL,
             contents: [{ role: 'user', parts }],
             config: buildImageGenerationConfig({
               aspectRatio: normalizedAspectRatio,
@@ -508,6 +510,7 @@ export const editGeneratedImageLocallyWithGemini = async (params: {
   imageSize?: string;
   requestBehavior?: ImageRequestBehavior;
   maxSupplementalProductImages?: number;
+  modelId?: string;
   signal?: AbortSignal;
 }) => {
   const {
@@ -521,6 +524,7 @@ export const editGeneratedImageLocallyWithGemini = async (params: {
     imageSize = '1K',
     requestBehavior,
     maxSupplementalProductImages = 1,
+    modelId,
     signal,
   } = params;
 
@@ -582,7 +586,7 @@ export const editGeneratedImageLocallyWithGemini = async (params: {
       async requestSignal => {
         try {
           return await ai.models.generateContent({
-            model: GEMINI_IMAGE_GENERATION_MODEL,
+            model: modelId?.trim() || GEMINI_IMAGE_GENERATION_MODEL,
             contents: [{ role: 'user', parts }],
             config: buildImageGenerationConfig({
               aspectRatio: normalizedAspectRatio,

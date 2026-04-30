@@ -19,11 +19,18 @@ const firstNonEmptyString = (...values: unknown[]) => {
 };
 
 const normalizeStringArray = (value: unknown) => {
-  if (!Array.isArray(value)) {
-    return [];
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeString(item)).filter(Boolean);
   }
 
-  return value.map(item => normalizeString(item)).filter(Boolean);
+  if (typeof value === 'string') {
+    return value
+      .split(/\r?\n|[;；]/)
+      .map(item => normalizeString(item).replace(/^[-•*]\s*/u, ''))
+      .filter(Boolean);
+  }
+
+  return [];
 };
 
 const normalizeBoolean = (value: unknown, fallback = false) => {
@@ -59,60 +66,259 @@ const uniqueStrings = (values: unknown[]) => {
   return next;
 };
 
+const pickValue = (source: any, keys: string[]) => {
+  if (!source || typeof source !== 'object') {
+    return undefined;
+  }
+
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined && value !== null && value !== '') {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+const pickWithFallback = (source: any, fallback: any, keys: string[]) =>
+  pickValue(source, keys) ?? pickValue(fallback, keys);
+
+const pickObjectWithFallback = (source: any, fallback: any, keys: string[]) => {
+  const value = pickWithFallback(source, fallback, keys);
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+};
+
+const pickArrayWithFallback = (source: any, fallback: any, keys: string[]) => {
+  const value = pickValue(source, keys);
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  const fallbackValue = pickValue(fallback, keys);
+  return Array.isArray(fallbackValue) ? fallbackValue : [];
+};
+
+const normalizeColorArea = (value: unknown): 'primary' | 'secondary' | 'accent' => {
+  const normalized = normalizeString(value).toLowerCase();
+  if (['secondary', '次要', '辅助', '辅色', 'secondary color'].includes(normalized)) {
+    return 'secondary';
+  }
+  if (['accent', '点缀', '强调', '装饰', 'accent color'].includes(normalized)) {
+    return 'accent';
+  }
+  return 'primary';
+};
+
+const CHINESE_DISPLAY_TERM_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bcordless\s+stick\s+vacuum\s+cleaner\b/gi, '无线手持式吸尘器'],
+  [/\bstick\s+vacuum\s+cleaner\b/gi, '手持式吸尘器'],
+  [/\bvacuum\s+cleaner\b/gi, '吸尘器'],
+  [/\bhandheld\s+vacuum\b/gi, '手持吸尘器'],
+  [/\bmain\s+product\s+body\b/gi, '产品主体'],
+  [/\buploaded\s+product\b/gi, '上传产品'],
+  [/\bquick[-\s]+release\s+buttons?\b/gi, '快拆按钮'],
+  [/\bquick[-\s]+release\b/gi, '快拆'],
+  [/\bcontrol\s+buttons?\b/gi, '控制按钮'],
+  [/\brelease\s+buttons?\b/gi, '释放按钮'],
+  [/\bcontrol\b/gi, '控制'],
+  [/\brelease\b/gi, '释放'],
+  [/\blower\s+joint\b/gi, '下部连接处'],
+  [/\blower\s+section\b/gi, '下部区域'],
+  [/\blower\s+part\b/gi, '下部部件'],
+  [/\bextension\s+tube\b/gi, '延长管'],
+  [/\bmetal\s+tube\b/gi, '金属管'],
+  [/\bbrush\s+head\b/gi, '地刷头'],
+  [/\bfloor\s+brush\b/gi, '地刷'],
+  [/\broller\s+brush\b/gi, '滚刷'],
+  [/\bdust\s+cup\b/gi, '尘杯'],
+  [/\bmain\s+unit\b/gi, '主机'],
+  [/\bwall\s+mount\b/gi, '壁挂支架'],
+  [/\bmultiple\b/gi, '多个'],
+  [/\bvisible\b/gi, '可见'],
+  [/\bkey\s+parts?\b/gi, '关键部件'],
+  [/\bincluding\b/gi, '包括'],
+  [/\bincludes\b/gi, '包括'],
+  [/\bon\b/gi, '位于'],
+  [/\band\b/gi, '和'],
+  [/\bor\b/gi, '或'],
+  [/\bbody\b/gi, '机身'],
+  [/\bjoint\b/gi, '连接处'],
+  [/\bbuttons?\b/gi, '按钮'],
+  [/\bcordless\b/gi, '无线'],
+  [/\bstick\b/gi, '杆式'],
+  [/\bvacuum\b/gi, '吸尘'],
+  [/\bcleaner\b/gi, '清洁器'],
+  [/\bhandheld\b/gi, '手持'],
+  [/\brechargeable\b/gi, '可充电'],
+  [/\bdetachable\b/gi, '可拆卸'],
+  [/\bbattery\b/gi, '电池'],
+  [/\bmotor\b/gi, '电机'],
+  [/\bhandle\b/gi, '手柄'],
+  [/\btube\b/gi, '管身'],
+  [/\bhead\b/gi, '头部'],
+  [/\bcontainer\b/gi, '容器'],
+  [/\bcup\b/gi, '杯体'],
+  [/\bfilter\b/gi, '滤网'],
+  [/\bnozzle\b/gi, '吸嘴'],
+  [/\bbrush\b/gi, '刷头'],
+  [/\bwheel\b/gi, '滚轮'],
+  [/\bport\b/gi, '接口'],
+  [/\bcharging\b/gi, '充电'],
+  [/\bmount\b/gi, '支架'],
+  [/\bunit\b/gi, '单元'],
+  [/\bparts?\b/gi, '部件'],
+  [/\bproduct\b/gi, '产品'],
+  [/\bcomponents?\b/gi, '组件'],
+  [/\bprimary\b/gi, '主要'],
+  [/\bsecondary\b/gi, '次要'],
+  [/\baccent\b/gi, '点缀'],
+  [/\bfront\b/gi, '前侧'],
+  [/\bback\b/gi, '后侧'],
+  [/\bleft\b/gi, '左侧'],
+  [/\bright\b/gi, '右侧'],
+  [/\btop\b/gi, '顶部'],
+  [/\bbottom\b/gi, '底部'],
+  [/\bcenter\b/gi, '中心'],
+  [/\bmiddle\b/gi, '中部'],
+  [/\bmatte\b/gi, '哑光'],
+  [/\bglossy\b/gi, '亮面'],
+  [/\bpolished\b/gi, '抛光'],
+  [/\bbrushed\b/gi, '拉丝'],
+  [/\bmetal\b/gi, '金属'],
+  [/\bplastic\b/gi, '塑料'],
+  [/\btransparent\b/gi, '透明'],
+  [/\bblack\b/gi, '黑色'],
+  [/\bred\b/gi, '红色'],
+  [/\bblue\b/gi, '蓝色'],
+  [/\bpurple\b/gi, '紫色'],
+  [/\bgreen\b/gi, '绿色'],
+  [/\bgray\b/gi, '灰色'],
+  [/\bgrey\b/gi, '灰色'],
+  [/\bwhite\b/gi, '白色'],
+  [/\bsilver\b/gi, '银色'],
+];
+
+const localizeEnglishTermsForDisplay = (text: string) => {
+  let next = text;
+  CHINESE_DISPLAY_TERM_REPLACEMENTS.forEach(([pattern, replacement]) => {
+    next = next.replace(pattern, replacement);
+  });
+
+  return next
+    .replace(/\s*,\s*/g, '，')
+    .replace(/\s*;\s*/g, '；')
+    .replace(/\.(?=\s|$)/g, '。')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([，。；：、])/g, '$1')
+    .replace(/([，。；：、]){2,}/g, '$1')
+    .trim();
+};
+
+const localizeFingerprintDisplayFallback = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(item => localizeFingerprintDisplayFallback(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entryValue]) => [
+        key,
+        localizeFingerprintDisplayFallback(entryValue),
+      ]),
+    );
+  }
+
+  if (typeof value === 'string') {
+    return localizeEnglishTermsForDisplay(value);
+  }
+
+  return value;
+};
+
+const collectFingerprintStrings = (value: any): string[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap(item => collectFingerprintStrings(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).flatMap(item => collectFingerprintStrings(item));
+  }
+
+  return typeof value === 'string' ? [value] : [];
+};
+
+const hasEnglishDisplayText = (value: any) =>
+  collectFingerprintStrings(value).some(item => /\b[A-Za-z]{2,}(?:[-'][A-Za-z]{2,})*\b/.test(item));
+
 const normalizeProductFingerprint = (value: any, displayZh?: any): ProductFingerprint => {
+  const structureSource = pickObjectWithFallback(value, displayZh, ['structure', '结构']);
+  const structureFallback = pickObjectWithFallback(displayZh, value, ['structure', '结构']);
+  const logoSource = pickObjectWithFallback(value, displayZh, ['logo', '标志', 'Logo', '标识']);
+  const logoFallback = pickObjectWithFallback(displayZh, value, ['logo', '标志', 'Logo', '标识']);
+
   const normalized: ProductFingerprint = {
-    category: firstNonEmptyString(value?.category, value?.productType, value?.type, displayZh?.category),
-    productSummary: firstNonEmptyString(value?.productSummary, value?.summary, displayZh?.productSummary),
-    colors: Array.isArray(value?.colors)
-      ? value.colors
+    category: firstNonEmptyString(
+      pickWithFallback(value, displayZh, ['category', 'productCategory', 'productType', 'type', '类目', '品类', '产品类型']),
+    ),
+    productSummary: firstNonEmptyString(
+      pickWithFallback(value, displayZh, ['productSummary', 'product_summary', 'summary', 'description', '产品总结', '产品总述', '产品描述', '描述']),
+    ),
+    colors: (() => {
+      const colors = pickArrayWithFallback(value, displayZh, ['colors', 'color', '颜色', '色彩']);
+      return colors
           .map((item: any) => ({
-            name: normalizeString(item?.name),
-            hex: normalizeString(item?.hex) || undefined,
-            area: item?.area === 'secondary' || item?.area === 'accent' ? item.area : 'primary',
-            mustPreserve: normalizeBoolean(item?.mustPreserve, true),
+            name: firstNonEmptyString(pickValue(item, ['name', '名称', 'color', '颜色'])),
+            hex: normalizeString(pickValue(item, ['hex', 'hexCode', 'hex_code', '十六进制代码'])) || undefined,
+            area: normalizeColorArea(pickValue(item, ['area', 'coverage', '覆盖范围', '区域'])),
+            mustPreserve: normalizeBoolean(pickValue(item, ['mustPreserve', 'must_preserve', '必须保留']), true),
           }))
-          .filter((item: any) => item.name)
-      : [],
-    materials: Array.isArray(value?.materials)
-      ? value.materials
+          .filter((item: any) => item.name);
+    })(),
+    materials: (() => {
+      const materials = pickArrayWithFallback(value, displayZh, ['materials', 'material', '材质', '材料']);
+      return materials
           .map((item: any) => ({
-            name: normalizeString(item?.name),
-            location: normalizeString(item?.location),
-            finish: normalizeString(item?.finish) || undefined,
-            mustPreserve: normalizeBoolean(item?.mustPreserve, true),
+            name: firstNonEmptyString(pickValue(item, ['name', '名称', 'material', '材质', '材料'])),
+            location: firstNonEmptyString(pickValue(item, ['location', 'position', '位置', '区域', '部位'])),
+            finish: normalizeString(pickValue(item, ['finish', 'surfaceFinish', 'surface_finish', '表面处理', '质感'])) || undefined,
+            mustPreserve: normalizeBoolean(pickValue(item, ['mustPreserve', 'must_preserve', '必须保留']), true),
           }))
           .filter((item: any) => item.name && item.location)
-      : [],
+    })(),
     structure: {
-      overallShape: normalizeString(value?.structure?.overallShape),
-      keyParts: normalizeStringArray(value?.structure?.keyParts),
-      proportions: normalizeString(value?.structure?.proportions) || undefined,
-      visibleControls: normalizeStringArray(value?.structure?.visibleControls),
-      openings: normalizeStringArray(value?.structure?.openings),
-      distinctiveFeatures: normalizeStringArray(value?.structure?.distinctiveFeatures),
+      overallShape: firstNonEmptyString(
+        pickWithFallback(structureSource, structureFallback, ['overallShape', 'overall_shape', 'shape', 'form', '整体形状', '整体外观', '形状']),
+      ),
+      keyParts: normalizeStringArray(pickWithFallback(structureSource, structureFallback, ['keyParts', 'key_parts', 'parts', 'components', '关键部件', '关键部分', '部件'])),
+      proportions: normalizeString(pickWithFallback(structureSource, structureFallback, ['proportions', 'proportion', '比例', '比例关系'])) || undefined,
+      visibleControls: normalizeStringArray(pickWithFallback(structureSource, structureFallback, ['visibleControls', 'visible_controls', 'controls', 'buttons', '可见控件', '可见细节', '按键'])),
+      openings: normalizeStringArray(pickWithFallback(structureSource, structureFallback, ['openings', 'opening', 'ports', '接口', '开口', '孔位'])),
+      distinctiveFeatures: normalizeStringArray(pickWithFallback(structureSource, structureFallback, ['distinctiveFeatures', 'distinctive_features', 'features', 'uniqueFeatures', '显著特征', '独特特征', '特征'])),
     },
-    accessories: Array.isArray(value?.accessories)
-      ? value.accessories
+    accessories: (() => {
+      const accessories = pickArrayWithFallback(value, displayZh, ['accessories', 'accessory', 'attachments', '配件', '附件']);
+      return accessories
           .map((item: any) => ({
-            name: normalizeString(item?.name),
-            count: Math.max(0, normalizeNumber(item?.count, 1)),
-            position: normalizeString(item?.position),
-            attached: normalizeBoolean(item?.attached, true),
-            mustPreserve: normalizeBoolean(item?.mustPreserve, true),
+            name: firstNonEmptyString(pickValue(item, ['name', '名称', 'accessory', '配件', '附件'])),
+            count: Math.max(0, normalizeNumber(pickValue(item, ['count', '数量']), 1)),
+            position: firstNonEmptyString(pickValue(item, ['position', 'location', '位置', '区域', '部位'])),
+            attached: normalizeBoolean(pickValue(item, ['attached', 'isAttached', '已连接', '连接状态']), true),
+            mustPreserve: normalizeBoolean(pickValue(item, ['mustPreserve', 'must_preserve', '必须保留']), true),
           }))
           .filter((item: any) => item.name && item.position)
-      : [],
+    })(),
     logo: {
-      hasLogo: normalizeBoolean(value?.logo?.hasLogo, false),
-      text: normalizeString(value?.logo?.text) || undefined,
-      position: normalizeString(value?.logo?.position) || undefined,
-      color: normalizeString(value?.logo?.color) || undefined,
-      shape: normalizeString(value?.logo?.shape) || undefined,
-      mustPreserve: normalizeBoolean(value?.logo?.mustPreserve, false),
+      hasLogo: normalizeBoolean(pickWithFallback(logoSource, logoFallback, ['hasLogo', 'has_logo', '有标志', '是否有Logo']), false),
+      text: normalizeString(pickWithFallback(logoSource, logoFallback, ['text', '文字', '文本', 'logoText'])) || undefined,
+      position: normalizeString(pickWithFallback(logoSource, logoFallback, ['position', 'location', '位置'])) || undefined,
+      color: normalizeString(pickWithFallback(logoSource, logoFallback, ['color', '颜色'])) || undefined,
+      shape: normalizeString(pickWithFallback(logoSource, logoFallback, ['shape', '形状'])) || undefined,
+      mustPreserve: normalizeBoolean(pickWithFallback(logoSource, logoFallback, ['mustPreserve', 'must_preserve', '必须保留']), false),
     },
-    forbiddenChanges: normalizeStringArray(value?.forbiddenChanges),
-    verifierChecklist: normalizeStringArray(value?.verifierChecklist),
-    confidence: Math.max(0, Math.min(100, normalizeNumber(value?.confidence, 0))),
+    forbiddenChanges: normalizeStringArray(pickWithFallback(value, displayZh, ['forbiddenChanges', 'forbidden_changes', 'mustNotChange', '禁止变化项', '禁止项', '禁改项'])),
+    verifierChecklist: normalizeStringArray(pickWithFallback(value, displayZh, ['verifierChecklist', 'verifier_checklist', 'checklist', '验证清单', '校验清单'])),
+    confidence: Math.max(0, Math.min(100, normalizeNumber(pickWithFallback(value, displayZh, ['confidence', '置信度']), 0))),
   };
 
   const fallbackKeyParts = uniqueStrings([
@@ -179,6 +385,69 @@ const getOpenAiFingerprintModels = () =>
   [env.openAiAnalysisModel, env.openAiIdentityFallbackModel]
     .map(model => model.trim())
     .filter((model, index, models) => Boolean(model) && models.indexOf(model) === index);
+
+const repairDisplayFingerprintToChinese = async (
+  canonicalEn: ProductFingerprint,
+  displaySource: any,
+  signal?: AbortSignal,
+): Promise<ProductFingerprint> => {
+  const normalizedDisplay = normalizeProductFingerprint(displaySource, canonicalEn);
+  if (!hasEnglishDisplayText(normalizedDisplay)) {
+    return normalizedDisplay;
+  }
+
+  const prompt = `
+    You are preparing the Chinese display version of a product fingerprint for a Chinese admin UI.
+
+    Translate every descriptive display value into natural Simplified Chinese.
+    Preserve the exact JSON schema and semantic meaning.
+    Do not change product identity, counts, colors, positions, or forbidden constraints.
+    Keep brand names, model numbers, color hex values, and technical units unchanged only when they are actual identifiers or units.
+    Do not leave English product-description words such as "multiple", "quick-release", "control buttons", "body", "lower joint", "vacuum cleaner", "brush head", or "dust cup" in display fields.
+
+    Canonical English fingerprint:
+    ${JSON.stringify(canonicalEn, null, 2)}
+
+    Current display fingerprint:
+    ${JSON.stringify(normalizedDisplay, null, 2)}
+
+    Return JSON only with the same ProductFingerprint shape, using Simplified Chinese display values.
+  `;
+
+  for (const model of getOpenAiFingerprintModels()) {
+    try {
+      const responseJson = await postOpenAiResponses({
+        model,
+        input: [
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: prompt }],
+          },
+        ],
+        maxOutputTokens: 2400,
+        timeoutMs: 45000,
+        signal,
+        actionLabel: '产品特征中文展示修复',
+      });
+      const outputText = extractOpenAiResponseText(responseJson);
+      if (!outputText) {
+        continue;
+      }
+
+      const parsed = extractOpenAiJsonObject(outputText);
+      const repaired = normalizeProductFingerprint(parsed, canonicalEn);
+      return hasEnglishDisplayText(repaired)
+        ? normalizeProductFingerprint(localizeFingerprintDisplayFallback(repaired), canonicalEn)
+        : repaired;
+    } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
+    }
+  }
+
+  return normalizeProductFingerprint(localizeFingerprintDisplayFallback(normalizedDisplay), canonicalEn);
+};
 
 export const analyzeProductFingerprintWithOpenAi = async (
   mainImageBase64: { data: string; mimeType: string },
@@ -248,9 +517,15 @@ export const analyzeProductFingerprintWithOpenAi = async (
           ? parsed.canonicalEn
           : parsed;
 
+      const canonicalEn = normalizeProductFingerprint(canonicalSource, parsed?.displayZh);
+      const displaySource =
+        parsed?.displayZh && typeof parsed.displayZh === 'object'
+          ? parsed.displayZh
+          : canonicalEn;
+
       return {
-        canonicalEn: normalizeProductFingerprint(canonicalSource, parsed?.displayZh),
-        displayZh: parsed?.displayZh,
+        canonicalEn,
+        displayZh: await repairDisplayFingerprintToChinese(canonicalEn, displaySource, signal),
       };
     } catch (error) {
       if (signal?.aborted) {
@@ -315,9 +590,15 @@ export const updateFingerprintFromTextDraft = async (
     displayZh?: unknown;
   };
 
+  const canonicalEn = normalizeProductFingerprint(rawResult?.canonicalEn, rawResult?.displayZh);
+  const displaySource =
+    rawResult?.displayZh && typeof rawResult.displayZh === 'object'
+      ? rawResult.displayZh
+      : canonicalEn;
+
   return {
-    canonicalEn: normalizeProductFingerprint(rawResult?.canonicalEn, rawResult?.displayZh),
-    displayZh: rawResult?.displayZh,
+    canonicalEn,
+    displayZh: await repairDisplayFingerprintToChinese(canonicalEn, displaySource, signal),
   };
 };
 
